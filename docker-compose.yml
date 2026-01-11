@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    # 1. 이미지 빌드 설정
+    # build: . 은 "현재 폴더에 있는 Dockerfile로 빌드해라"라는 뜻입니다.
+    # (선택) 만약 도커 허브 이미지를 바로 쓸 거라면 build 대신 아래를 씁니다.
+    # image: [본인_도커허브_아이디]/volrabbit-server
+
+    # 2. 컨테이너 이름 (선택 사항)
+    container_name: volrabbit-backend
+    image: volrabbit-backend:latest
+
+    build : .
+
+
+    # 3. 포트 연결 (외부:내부)
+    ports:
+      - "8080:8080"
+
+    # 4. 환경 변수 파일 연결
+    # .env 파일에 있는 내용을 자동으로 컨테이너에 주입합니다.
+    env_file:
+      - .env
+
+    # 5. 재시작 정책 (서버 재부팅 시 자동 실행)
+    restart: unless-stopped
