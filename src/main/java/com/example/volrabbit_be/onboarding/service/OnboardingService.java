@@ -15,9 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -64,9 +62,16 @@ public class OnboardingService {
     }
 
     private long processResponses(List<OnboardingDto.OnboardingSubmitRequest> onboardingSubmits) {
+        // 페르소나명, 아이디 매핑
+        Map<String, Long> personaIdMap = new HashMap<>();
+        personaIdMap.put("Time Wizard", 1L);
+        personaIdMap.put("Starter-Freeze Bot", 2L);
+        personaIdMap.put("Attention-thief", 3L);
+        personaIdMap.put("Emotional Adventure", 4L);
+
         // 응답이 아예 비어있을 때
         if (onboardingSubmits == null || onboardingSubmits.isEmpty()) {
-            return 2L;
+            return personaIdMap.get("Starter-Freeze Bot");
         }
 
         // 불완전한 응답 (온보딩 질문 개수 7개)
@@ -79,24 +84,24 @@ public class OnboardingService {
 
         if (questionResponseFromList(onboardingSubmits, 3) >= 2
                 || questionResponseFromList(onboardingSubmits, 4) >= 2) {
-            return 1L;
+            return personaIdMap.get("Time Wizard");
         }
 
         if (questionResponseFromList(onboardingSubmits, 1) >= 2
                 || questionResponseFromList(onboardingSubmits, 2) >= 2) {
-            return 2L;
+            return personaIdMap.get("Starter-Freeze Bot");
         }
 
         if (questionResponseFromList(onboardingSubmits, 5) >= 2) {
-            return 3L;
+            return personaIdMap.get("Attention-thief");
         }
 
         if (questionResponseFromList(onboardingSubmits, 6) >= 2
                 || questionResponseFromList(onboardingSubmits, 7) >= 2) {
-            return 4L;
+            return personaIdMap.get("Emotional Adventure");
         }
 
-        return 2L; // 기본값
+        return personaIdMap.get("Starter-Freeze Bot"); // 기본값
     }
 
     // 온보딩 제출 정보 리스트에서 해당하는 질문 번호에 대한 응답을 가져옴
