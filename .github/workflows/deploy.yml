@@ -47,8 +47,7 @@ jobs:
       # 4. 서버에 .env 파일 생성
       - name: Create .env file on server
         uses: appleboy/ssh-action@master
-        env:
-          # 시크릿 연결 (이거 꼭 있어야 값 넘어갑니다!)
+
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
@@ -64,17 +63,15 @@ jobs:
           envs: DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,PRIVATE_PEM,OAUTH2_CLIENT_ID,OAUTH2_CLIENT_SECRET
           script: |
             cd /home/${{ secrets.USERNAME }}/app
-
+            
             cat > .env << EOF
+            # ==================== 데이터베이스 설정 ====================
             DB_HOST=$DB_HOST
             DB_PORT=$DB_PORT
             DB_NAME=$DB_NAME
             DB_USERNAME=$DB_USERNAME
             DB_PASSWORD=$DB_PASSWORD
-            JWT_SECRET_KEY="$PRIVATE_PEM"
-            OAUTH2_CLIENT_ID=$OAUTH2_CLIENT_ID
-            OAUTH2_CLIENT_SECRET=$OAUTH2_CLIENT_SECRET
-            EOF
+
 
       # 5. 배포 실행 (2번 스타일처럼 실행 단계 분리)
       - name: Deploy on server
