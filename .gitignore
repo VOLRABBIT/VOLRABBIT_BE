@@ -1,6 +1,8 @@
 HELP.md
 .gradle
 .env
+*.pem
+*.key
 db_data
 build/
 !gradle/wrapper/gradle-wrapper.jar
