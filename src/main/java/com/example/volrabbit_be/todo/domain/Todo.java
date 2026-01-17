@@ -53,7 +53,7 @@ public class Todo extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Status status; // IN_PROGRESS, SUCCESS, FAIL, GIVE_UP, RETRY
+    private todoStatus todoStatus; // IN_PROGRESS, SUCCESS, FAIL, GIVE_UP, RETRY
 
     @Builder
     private Todo(
@@ -74,7 +74,7 @@ public class Todo extends BaseTimeEntity {
         this.repeatType = repeatType;
         this.segmentationType = segmentationType;
         this.verificationType = verificationType;
-        this.status = Status.IN_PROGRESS;
+        this.todoStatus = todoStatus.IN_PROGRESS;
     }
 
     // 투두 수정시, 전체 수정 저장용
@@ -98,24 +98,24 @@ public class Todo extends BaseTimeEntity {
 
     // 상태 변경
     public void complete() {
-        if (this.status != Status.IN_PROGRESS) {
+        if (this.todoStatus != todoStatus.IN_PROGRESS) {
             throw new IllegalStateException("진행 중인 할 일만 완료 처리할 수 있습니다.");
         }
-        this.status = Status.SUCCESS;
+        this.todoStatus = todoStatus.SUCCESS;
     }
 
     public void fail() {
-        if (this.status != Status.IN_PROGRESS) {
+        if (this.todoStatus != todoStatus.IN_PROGRESS) {
             throw new IllegalStateException("진행 중인 할 일만 실패 처리할 수 있습니다.");
         }
-        this.status = Status.FAIL;
+        this.todoStatus = todoStatus.FAIL;
     }
 
     public void giveUp() {
-        if (this.status == Status.SUCCESS) {
+        if (this.todoStatus == todoStatus.SUCCESS) {
             throw new IllegalStateException("이미 완료된 할 일은 포기할 수 없습니다.");
         }
-        this.status = Status.GIVE_UP;
+        this.todoStatus = todoStatus.GIVE_UP;
     }
 
     /**
@@ -124,7 +124,7 @@ public class Todo extends BaseTimeEntity {
      * - 선택한 날짜로 새로운 투두를 생성한다 (새 투두는 IN_PROGRESS)
      */
     public Todo createRetryTodo(LocalDate newDueDate, DueType newDueType) {
-        if (this.status != Status.FAIL && this.status != Status.GIVE_UP) {
+        if (this.todoStatus != todoStatus.FAIL && this.todoStatus != todoStatus.GIVE_UP) {
             throw new IllegalStateException("실패/포기한 할 일만 다시 도전할 수 있습니다.");
         }
 
