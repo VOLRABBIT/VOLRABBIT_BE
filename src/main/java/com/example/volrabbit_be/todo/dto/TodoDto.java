@@ -209,4 +209,43 @@ public class TodoDto {
         private Long totalSeconds;
         private List<HourlyTimeStat> topHours;  // TOP3
     }
+
+    // 세분화 AI 재요청
+    @Getter
+    @NoArgsConstructor
+    public static class AiSegmentationRequest {
+        private SegmentationType segmentationType; // TWO/THREE/AUTO
+    }
+
+    // 우선순위(사분면)
+    @Getter
+    @Builder
+    public static class PriorityItem {
+        private Long todoId;
+        private String content;
+        private PriorityQuadrant quadrant;
+        private String quadrantLabel;
+        private Integer priorityOrder;
+    }
+
+    @Getter
+    @Builder
+    public static class DailyPriorityResponse {
+        private LocalDate date;
+        private List<PriorityItem> items; // priorityOrder 정렬된 전체
+    }
+
+    // 드래그 순서 반영
+    @Getter
+    @NoArgsConstructor
+    public static class PriorityReorderRequest {
+        private List<OrderPatch> orders;
+
+        @Getter
+        @NoArgsConstructor
+        public static class OrderPatch {
+            private Long todoId;
+            private Integer priorityOrder;
+        }
+    }
 }

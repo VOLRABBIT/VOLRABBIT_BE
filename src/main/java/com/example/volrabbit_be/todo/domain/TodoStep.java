@@ -1,7 +1,5 @@
 package com.example.volrabbit_be.todo.domain;
 
-// 세분화
-
 import com.example.volrabbit_be.global.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -29,29 +27,21 @@ public class TodoStep extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean isCompleted;
 
+    @Column(nullable = false)
+    private Long stepOrder;
+
     @Builder
-    private TodoStep(Todo todo, String content) {
+    private TodoStep(Todo todo, String content, Long stepOrder) {
         this.todo = todo;
         this.content = content;
+        this.stepOrder = stepOrder;
         this.isCompleted = false;
     }
 
-    // 단계 내용 수정
     public void updateContent(String content) {
         this.content = content;
     }
 
-    // 단계 완료 처리
-    public void complete() {
-        this.isCompleted = true;
-    }
-
-    // 단계 완료 취소
-    public void undoComplete() {
-        this.isCompleted = false;
-    }
-
-    // 완료 상태
     public void toggleComplete() {
         this.isCompleted = !this.isCompleted;
     }

@@ -1,0 +1,49 @@
+package com.example.volrabbit_be.todo.service;
+
+import com.example.volrabbit_be.todo.domain.Todo;
+import com.example.volrabbit_be.todo.domain.TodoStep;
+import com.example.volrabbit_be.todo.domain.enumType.todoStatus;
+import com.example.volrabbit_be.todo.dto.TodoDto;
+import com.example.volrabbit_be.todo.repository.TodoRepository;
+import com.example.volrabbit_be.todo.repository.TodoStepRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class TodoStepService {
+
+    private final TodoRepository todoRepository;
+    private final TodoStepRepository todoStepRepository;
+
+    @Transactional
+    public TodoDto.StatusResponse toggleStep(Long userId, Long todoId, Long stepId) {
+        Todo todo = todoRepository.findByIdAndUserId(todoId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("투두가 존재하지 않습니다."));
+
+        TodoStep step = todoStepRepository.findById(stepId)
+                .orElseThrow(() -> new IllegalArgumentException("세분화 단계가 존재하지 않습니다."));
+
+        if (!step.getTodo().getId().equals(todo.getId())) {
+            throw new IllegalArgumentException("해당 투두의 세분화 단계가 아닙니다.");
+        }
+
+        if (todo.getTodoStatus() != todoStatus.IN_PROGRESS) {
+            throw new IllegalStateException("진행 중인 투두에서만 세분화 단계를 완료할 수 있습니다.");
+        }
+
+        step.toggleComplete();
+
+        long remaining = todoStepRepository.countByTodoIdAndIsCompletedFalse(todo.getId());
+        if (remaining == 0) {
+            todo.complete();
+        }
+
+        return TodoDto.StatusResponse.builder()
+                .todoId(todo.getId())
+                .todoStatus(todo.getTodoStatus())
+                .build();
+    }
+}

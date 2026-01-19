@@ -30,6 +30,7 @@ public class TodoService {
     private final UserRepository userRepository;
     private final TodoOutcomeRepository todoOutcomeRepository;
     private final TodoVerificationRepository todoVerificationRepository;
+    private final TodoSegmentationService todoSegmentationService;
 
     @Transactional
     public TodoDto.CreateResponse create(Long userId, TodoDto.CreateRequest request) {
@@ -66,6 +67,8 @@ public class TodoService {
                 .build();
 
         Todo saved = todoRepository.save(todo);
+
+        todoSegmentationService.generateStepsIfNeeded(userId, saved.getId(), request.getSegmentationType());
 
         return TodoDto.CreateResponse.builder()
                 .todoId(saved.getId())
