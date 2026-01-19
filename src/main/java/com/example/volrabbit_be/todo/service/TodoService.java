@@ -393,7 +393,7 @@ public class TodoService {
     @Transactional
     public TodoDto.VerificationResponse verifyTag(Long userId, Long todoId, TodoDto.TagRequest request) {
         if (request == null || request.getTagText() == null || request.getTagText().isBlank()) {
-            throw new IllegalArgumentException("tagText는 필수입니다.");
+            throw new IllegalArgumentException("제대로 된 NFC 값이 입력되지 않았습니다.");
         }
 
         Todo todo = findTodo(todoId, userId);

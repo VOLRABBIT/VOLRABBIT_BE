@@ -114,6 +114,13 @@ public class TodoController {
         return ResponseEntity.ok(todoService.verifyCheck(userId, todoId));
     }
 
+    //체크 인증 취소(미완료로 되돌리기) - CHECK 선택한 투두만 가능
+    @DeleteMapping("/{todoId}/check")
+    public ResponseEntity<TodoDto.StatusResponse> unverifyCheck(@PathVariable Long todoId) {
+        Long userId = SecurityUtil.getCurrentUserId();
+        return ResponseEntity.ok(todoService.unverifyCheck(userId, todoId));
+    }
+
     // 사진 인증
     @PostMapping("/{todoId}/photo-proof")
     public ResponseEntity<TodoDto.VerificationResponse> verifyPhotoProof(
