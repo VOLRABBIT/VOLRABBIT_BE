@@ -160,4 +160,27 @@ public class TodoDto {
     public static class ListResponse {
         private List<SummaryResponse> todos;
     }
+
+    @Getter
+    @NoArgsConstructor
+    public static class TimeLogCreateRequest {
+        private Long durationSeconds;
+    }
+
+    @Getter
+    @Builder
+    public static class TimeLogCreateResponse {
+        private Long timeLogId;
+        private Long todoId;
+        private Long durationSeconds;
+        private Long totalSeconds;
+    }
+
+    @Getter
+    @Builder
+    public static class TimeLogSummaryResponse {
+        private Long todoId;
+        private Long totalSeconds;
+    }
+
 }
