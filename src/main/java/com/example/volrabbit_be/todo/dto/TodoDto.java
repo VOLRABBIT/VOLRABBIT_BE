@@ -161,6 +161,8 @@ public class TodoDto {
         private List<SummaryResponse> todos;
     }
 
+    // 시간 기록 (타이머)
+
     @Getter
     @NoArgsConstructor
     public static class TimeLogCreateRequest {
@@ -183,4 +185,28 @@ public class TodoDto {
         private Long totalSeconds;
     }
 
+    @Getter
+    @Builder
+    public static class DailyTimeSummaryResponse {
+        private LocalDate date;
+        private Long totalSeconds;
+    }
+
+    // 주차 리포트
+
+    @Getter
+    @Builder
+    public static class HourlyTimeStat {
+        private Integer hour;       // 0~23
+        private Long totalSeconds;
+    }
+
+    @Getter
+    @Builder
+    public static class WeeklyTimeReportResponse {
+        private Integer year;
+        private Integer week;
+        private Long totalSeconds;
+        private List<HourlyTimeStat> topHours;  // TOP3
+    }
 }

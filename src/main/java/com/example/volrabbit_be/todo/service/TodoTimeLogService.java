@@ -6,8 +6,14 @@ import com.example.volrabbit_be.todo.dto.TodoDto;
 import com.example.volrabbit_be.todo.repository.TodoRepository;
 import com.example.volrabbit_be.todo.repository.TodoTimeLogRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.WeekFields;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +25,7 @@ public class TodoTimeLogService {
     private final TodoRepository todoRepository;
     private final TodoTimeLogRepository todoTimeLogRepository;
 
+    // ===== 기록 저장 =====
     @Transactional
     public TodoDto.TimeLogCreateResponse create(
             Long userId,
@@ -30,13 +37,8 @@ public class TodoTimeLogService {
         }
 
         long seconds = request.getDurationSeconds();
-
-        if (seconds <= 0) {
-            throw new IllegalArgumentException("durationSeconds는 0보다 커야 합니다.");
-        }
-        if (seconds > MAX_SECONDS) {
-            throw new IllegalArgumentException("durationSeconds가 너무 큽니다.");
-        }
+        if (seconds <= 0) throw new IllegalArgumentException("durationSeconds는 0보다 커야 합니다.");
+        if (seconds > MAX_SECONDS) throw new IllegalArgumentException("durationSeconds가 너무 큽니다.");
 
         Todo todo = todoRepository.findByIdAndUserId(todoId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("투두가 존재하지 않습니다."));
@@ -58,6 +60,7 @@ public class TodoTimeLogService {
                 .build();
     }
 
+    // ===== 투두별 누적 =====
     public TodoDto.TimeLogSummaryResponse summary(Long userId, Long todoId) {
         todoRepository.findByIdAndUserId(todoId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("투두가 존재하지 않습니다."));
@@ -67,6 +70,58 @@ public class TodoTimeLogService {
         return TodoDto.TimeLogSummaryResponse.builder()
                 .todoId(todoId)
                 .totalSeconds(totalSeconds)
+                .build();
+    }
+
+    // ===== 날짜별 누적 =====
+    public TodoDto.DailyTimeSummaryResponse dailySummary(Long userId, LocalDate date) {
+        if (date == null) throw new IllegalArgumentException("date는 필수입니다.");
+
+        long totalSeconds = todoTimeLogRepository.sumDurationSecondsByUserIdAndDate(userId, date);
+
+        return TodoDto.DailyTimeSummaryResponse.builder()
+                .date(date)
+                .totalSeconds(totalSeconds)
+                .build();
+    }
+
+    // ===== 주차별 리포트 (총 시간 + TOP3 시간대) =====
+    public TodoDto.WeeklyTimeReportResponse weeklyReport(Long userId, int year, int week) {
+        if (year < 2000 || year > 2100) throw new IllegalArgumentException("year가 올바르지 않습니다.");
+        if (week < 1 || week > 53) throw new IllegalArgumentException("week가 올바르지 않습니다.");
+
+        WeekFields wf = WeekFields.ISO;
+
+        // ISO week 기준: 1월 4일이 포함된 주가 1주차
+        LocalDate anchor = LocalDate.of(year, 1, 4);
+        LocalDate weekStart = anchor
+                .with(wf.weekOfWeekBasedYear(), week)
+                .with(wf.dayOfWeek(), 1); // 월요일
+
+        LocalDateTime startInclusive = weekStart.atStartOfDay();
+        LocalDateTime endExclusive = startInclusive.plusDays(7);
+
+        long totalSeconds = todoTimeLogRepository.sumDurationSecondsByUserIdAndCreatedDateRange(
+                userId, startInclusive, endExclusive
+        );
+
+        List<TodoTimeLogRepository.HourSum> top = todoTimeLogRepository.findTopHoursByUserIdAndCreatedDateRange(
+                userId, startInclusive, endExclusive, PageRequest.of(0, 3)
+        );
+
+        List<TodoDto.HourlyTimeStat> topHours = top.stream()
+                .map(r -> TodoDto.HourlyTimeStat.builder()
+                        .hour(r.getHour())
+                        .totalSeconds(r.getTotalSeconds() == null ? 0L : r.getTotalSeconds())
+                        .build()
+                )
+                .toList();
+
+        return TodoDto.WeeklyTimeReportResponse.builder()
+                .year(year)
+                .week(week)
+                .totalSeconds(totalSeconds)
+                .topHours(topHours)
                 .build();
     }
 }
