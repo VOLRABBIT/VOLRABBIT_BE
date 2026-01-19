@@ -14,7 +14,7 @@ import java.time.LocalDate;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "Todos")
+@Table(name = "todos")
 public class Todo extends BaseTimeEntity {
 
     @Id
@@ -37,23 +37,27 @@ public class Todo extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private DueType dueType; // TODAY, TOMORROW, CUSTOM
+    private DueType dueType;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private RepeatType repeatType; // NONE, DAILY, WEEKLY, MONTHLY
+    private RepeatType repeatType;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private SegmentationType segmentationType; // NONE, TWO, THREE, AUTO
+    private SegmentationType segmentationType;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private VerificationType verificationType; // CHECK, PHOTO-PROOF, TAG
+    private VerificationType verificationType;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private todoStatus todoStatus; // IN_PROGRESS, SUCCESS, FAIL, GIVE_UP, RETRY
+    private todoStatus todoStatus;
+
+    // 재도전으로 생성된 투두면 원본 todo id가 들어감 (일반 투두는 null)
+    @Column(name = "retry_from_todo_id")
+    private Long retryFromTodoId;
 
     @Builder
     private Todo(
@@ -64,7 +68,8 @@ public class Todo extends BaseTimeEntity {
             DueType dueType,
             RepeatType repeatType,
             SegmentationType segmentationType,
-            VerificationType verificationType
+            VerificationType verificationType,
+            Long retryFromTodoId
     ) {
         this.user = user;
         this.category = category;
@@ -75,9 +80,13 @@ public class Todo extends BaseTimeEntity {
         this.segmentationType = segmentationType;
         this.verificationType = verificationType;
         this.todoStatus = todoStatus.IN_PROGRESS;
+        this.retryFromTodoId = retryFromTodoId;
     }
 
-    // 투두 수정시, 전체 수정 저장용
+    public boolean isRetryTodo() {
+        return this.retryFromTodoId != null;
+    }
+
     public void update(
             Category category,
             String content,
@@ -96,7 +105,24 @@ public class Todo extends BaseTimeEntity {
         this.verificationType = verificationType;
     }
 
-    // 상태 변경
+    public void patchUpdate(
+            Category category,
+            String content,
+            LocalDate dueDate,
+            DueType dueType,
+            RepeatType repeatType,
+            SegmentationType segmentationType,
+            VerificationType verificationType
+    ) {
+        if (category != null) this.category = category;
+        if (content != null) this.content = content;
+        if (dueType != null) this.dueType = dueType;
+        if (dueDate != null) this.dueDate = dueDate;
+        if (repeatType != null) this.repeatType = repeatType;
+        if (segmentationType != null) this.segmentationType = segmentationType;
+        if (verificationType != null) this.verificationType = verificationType;
+    }
+
     public void complete() {
         if (this.todoStatus != todoStatus.IN_PROGRESS) {
             throw new IllegalStateException("진행 중인 할 일만 완료 처리할 수 있습니다.");
@@ -111,18 +137,20 @@ public class Todo extends BaseTimeEntity {
         this.todoStatus = todoStatus.FAIL;
     }
 
+    public void reopenToInProgress() {
+        if (this.todoStatus != todoStatus.SUCCESS) {
+            throw new IllegalStateException("완료된 할 일만 미완료로 되돌릴 수 있습니다.");
+        }
+        this.todoStatus = todoStatus.IN_PROGRESS;
+    }
+
     public void giveUp() {
-        if (this.todoStatus == todoStatus.SUCCESS) {
-            throw new IllegalStateException("이미 완료된 할 일은 포기할 수 없습니다.");
+        if (this.todoStatus != todoStatus.IN_PROGRESS) {
+            throw new IllegalStateException("진행 중인 할 일만 포기할 수 있습니다.");
         }
         this.todoStatus = todoStatus.GIVE_UP;
     }
 
-    /**
-     * 다시 도전하기:
-     * - 기존 투두는 FAIL/GIVE_UP 상태로 "저장"되어 남아있고
-     * - 선택한 날짜로 새로운 투두를 생성한다 (새 투두는 IN_PROGRESS)
-     */
     public Todo createRetryTodo(LocalDate newDueDate, DueType newDueType) {
         if (this.todoStatus != todoStatus.FAIL && this.todoStatus != todoStatus.GIVE_UP) {
             throw new IllegalStateException("실패/포기한 할 일만 다시 도전할 수 있습니다.");
@@ -137,6 +165,8 @@ public class Todo extends BaseTimeEntity {
                 .repeatType(this.repeatType)
                 .segmentationType(this.segmentationType)
                 .verificationType(this.verificationType)
+                // 재도전 투두 표식
+                .retryFromTodoId(this.id)
                 .build();
     }
 }
