@@ -70,14 +70,10 @@ public class CategoryService {
                 .build();
     }
 
-    // 카테고리 단건 조회(isActive=true)
+    // 카테고리 단건 조회(isActive=true, 활성화된 카테고리만 조회 가능)
     public CategoryDto.CategoryResponse getOne(Long userId, Long categoryId) {
-        Category category = categoryRepository.findByIdAndUserId(categoryId, userId)
+        Category category = categoryRepository.findByIdAndUserIdAndIsActiveTrue(categoryId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("카테고리가 존재하지 않습니다."));
-
-        if (!category.isActive()) {
-            throw new IllegalArgumentException("삭제(비활성화)된 카테고리입니다.");
-        }
 
         return toResponse(category);
     }

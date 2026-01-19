@@ -12,6 +12,9 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     Optional<Category> findByIdAndUserId(Long categoryId, Long userId);
 
-    // 목록 조회
+    // 단건 조회(활성만)
+    Optional<Category> findByIdAndUserIdAndIsActiveTrue(Long categoryId, Long userId);
+
+    // 목록 조회(활성만)
     List<Category> findAllByUserIdAndIsActiveTrueOrderByIdAsc(Long userId);
 }
