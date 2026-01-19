@@ -2,6 +2,12 @@ name: Deploy to Server
 
 on:
   push:
+    # 1. 이미지 빌드 설정
+    # build: . 은 "현재 폴더에 있는 Dockerfile로 빌드해라"라는 뜻입니다.
+    # (선택) 만약 도커 허브 이미지를 바로 쓸 거라면 build 대신 아래를 씁니다.
+    # image: [본인_도커허브_아이디]/volrabbit-server
+
+    # 2. 컨테이너 이름 (선택 사항)
     branches: [ "main" ]
 
 jobs:
@@ -16,6 +22,9 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Build with Gradle
         run: ./gradlew clean build -x test
@@ -35,26 +44,34 @@ jobs:
           source: "deploy.tar"
           target: "/home/${{ secrets.USERNAME }}/app"
 
-      # 4. 서버에 .env 파일 생성 (2번 스타일 적용!)
-      # 여기서 환경변수를 관리하면 나중에 추가/삭제가 매우 편해집니다.
+      # 4. 서버에 .env 파일 생성
       - name: Create .env file on server
         uses: appleboy/ssh-action@master
+
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          PRIVATE_PEM: ${{ secrets.PRIVATE_PEM }}
+          OAUTH2_CLIENT_ID: ${{ secrets.OAUTH2_CLIENT_ID }}
+          OAUTH2_CLIENT_SECRET: ${{ secrets.OAUTH2_CLIENT_SECRET }}
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
-          # [핵심] 여기에 사용할 시크릿을 등록합니다.
-          envs: DATABASE_URL, DATABASE_USERNAME, DATABASE_PASSWORD
+          envs: DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,PRIVATE_PEM,OAUTH2_CLIENT_ID,OAUTH2_CLIENT_SECRET
           script: |
             cd /home/${{ secrets.USERNAME }}/app
-
-            cat > .env << EOF
-            DATABASE_URL=$DATABASE_URL
-            DATABASE_USERNAME=$DATABASE_USERNAME
-            DATABASE_PASSWORD=$DATABASE_PASSWORD
-            EOF
             
-            echo ".env created."
+            cat > .env << EOF
+            # ==================== 데이터베이스 설정 ====================
+            DB_HOST=$DB_HOST
+            DB_PORT=$DB_PORT
+            DB_NAME=$DB_NAME
+            DB_USERNAME=$DB_USERNAME
+            DB_PASSWORD=$DB_PASSWORD
+
 
       # 5. 배포 실행 (2번 스타일처럼 실행 단계 분리)
       - name: Deploy on server
@@ -68,7 +85,7 @@ jobs:
             
             # 압축 풀기
             tar -xvf deploy.tar
-            
+
             # Docker Compose 재시작
             # (같은 폴더의 .env를 자동으로 읽습니다)
             docker-compose down
