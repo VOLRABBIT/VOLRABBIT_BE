@@ -2,6 +2,9 @@ package com.example.volrabbit_be.user.service;
 
 import com.example.volrabbit_be.global.jwt.TokenProvider;
 import com.example.volrabbit_be.global.util.SecurityUtil;
+import com.example.volrabbit_be.persona.domain.Persona;
+import com.example.volrabbit_be.persona.repository.PersonaRepository;
+import com.example.volrabbit_be.user.domain.SocialType;
 import com.example.volrabbit_be.user.domain.User;
 import com.example.volrabbit_be.user.domain.UserToken;
 import com.example.volrabbit_be.user.domain.UserType;
@@ -12,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,60 +29,86 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final UserTokenRepository userTokenRepository;
+    private final PersonaRepository personaRepository;
     private final TokenProvider tokenProvider;
+    private final PasswordEncoder passwordEncoder;
 
-// 게스트 회원가입 및 로그인
+    // 일반 회원가입
     @Transactional
-    public UserDto.LoginResponse registerGuest() {
-        //  유저 생성
+    public UserDto.SignupResponse registerGeneral(UserDto.JoinRequest request) {
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
+        }
+        if (checkNicknameDuplicate(request.getNickname())) {
+            throw new IllegalArgumentException("이미 존재하는 닉네임입니다.");
+        }
+        if (userRepository.existsByDeviceId(request.getDeviceId())) {
+            throw new IllegalArgumentException("해당 기기에서 이미 가입된 계정이 존재합니다. (1기기 1계정 정책)");
+        }
+
         User user = User.builder()
-                .nickname(generateUniqueNickname())
-                .userType(UserType.GUEST)
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .nickname(request.getNickname())
+                .userType(UserType.GENERAL)
+                .socialType(SocialType.NONE)
+                .deviceId(request.getDeviceId())
                 .build();
+
         User savedUser = userRepository.save(user);
 
-        //  토큰 발급
-        Authentication authentication = createAuthentication(savedUser.getId());
-        String accessToken = tokenProvider.generateAccessToken("s",authentication);
-        String refreshToken = tokenProvider.generateRefreshToken(authentication);
-
-        // 리프레시 토큰 DB 저장
-        UserToken userToken = userTokenRepository.findByUserId(savedUser.getId())
-                .orElse(UserToken.builder().user(savedUser).build());
-        userToken.updateRefreshToken(refreshToken);
-        userTokenRepository.save(userToken);
-
-        return UserDto.LoginResponse.of(accessToken, refreshToken, savedUser);
+        return UserDto.SignupResponse.from(savedUser);
     }
 
-    // 토큰 재발급
+    // 일반 로그인
     @Transactional
-    public UserDto.LoginResponse reissueToken(UserDto.ReissueRequest request) {
-        //  리프레시 토큰 검증
-        if (!tokenProvider.validateToken(request.getRefreshToken())) {
-            throw new RuntimeException("Refresh Token이 유효하지 않습니다.");
+    public UserDto.TokenResponse loginGeneral(UserDto.LoginRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("가입되지 않은 이메일입니다."));
+
+        if (user.getUserType() == UserType.SOCIAL) {
+            throw new IllegalArgumentException(
+                    "이미 " + user.getSocialType() + " 소셜 계정으로 가입된 이메일입니다. 소셜 로그인을 이용해주세요."
+            );
         }
-        UserToken userToken = userTokenRepository.findByRefreshToken(request.getRefreshToken())
-                .orElseThrow(() -> new RuntimeException("토큰 정보를 찾을 수 없습니다."));
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
+        }
 
-        // 새로운 토큰 발급
-        User user = userToken.getUser();
-        Authentication authentication = createAuthentication(user.getId());
-
-        String newAccessToken = tokenProvider.generateAccessToken("s",authentication);
-
-        return UserDto.LoginResponse.of(newAccessToken, request.getRefreshToken(), user);
+        return issueTokens(user);
     }
 
-    // 유저 정보 조회
-    public UserDto.Response getUserInfo(Long userId) {
-        User user = findUserById(userId);
-        return UserDto.Response.from(user);
+    // 소셜 로그인
+    @Transactional
+    public UserDto.TokenResponse socialLogin(String email, String nickname) {
+        return userRepository.findByEmail(email)
+                .map(this::issueTokens)
+                .orElseGet(() -> {
+                    String uniqueNickname = nickname;
+                    while (userRepository.existsByNickname(uniqueNickname)) {
+                        uniqueNickname = nickname + "_" + UUID.randomUUID().toString().substring(0, 4);
+                    }
+
+                    User newUser = User.builder()
+                            .email(email)
+                            .nickname(uniqueNickname)
+                            .password(null)
+                            .userType(UserType.SOCIAL)
+                            .build();
+
+                    userRepository.save(newUser);
+                    return issueTokens(newUser);
+                });
+    }
+
+    // 내 정보 조회
+    public UserDto.UserInfo getUserInfo(Long userId) {
+        return UserDto.UserInfo.from(findUserById(userId));
     }
 
     // 닉네임 수정
     @Transactional
-    public UserDto.Response updateNickname(Long userId, UserDto.UpdateNicknameRequest request) {
+    public UserDto.UserInfo updateNickname(Long userId, UserDto.NicknameUpdateRequest request) {
         User user = findUserById(userId);
 
         if (checkNicknameDuplicate(request.getNickname())) {
@@ -86,12 +116,22 @@ public class UserService {
         }
 
         user.updateNickname(request.getNickname());
-        return UserDto.Response.from(user);
+        return UserDto.UserInfo.from(user);
     }
 
-    // 닉네임 중복 확인
-    public boolean checkNicknameDuplicate(String nickname) {
-        return userRepository.existsByNickname(nickname);
+    // 회원 탈퇴
+    @Transactional
+    public UserDto.DeleteUserResponse deleteUser() {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        User user = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저입니다."));
+
+        UserDto.DeleteUserResponse response = UserDto.DeleteUserResponse.from(user);
+
+        userTokenRepository.findByUserId(currentUserId).ifPresent(userTokenRepository::delete);
+        userRepository.delete(user);
+
+        return response;
     }
 
     // 로그아웃
@@ -104,21 +144,45 @@ public class UserService {
         userTokenRepository.delete(userToken);
     }
 
-    // 회원 탈퇴
+
+    // 토큰 재발급
     @Transactional
-    public void deleteUser() {
-        Long currentUserId = SecurityUtil.getCurrentUserId();
-        User user = userRepository.findById(currentUserId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저입니다."));
+    public UserDto.TokenResponse reissueToken(UserDto.ReissueRequest request) {
+        if (!tokenProvider.validateToken(request.getRefreshToken())) {
+            throw new IllegalArgumentException("Refresh Token이 유효하지 않습니다.");
+        }
+        UserToken userToken = userTokenRepository.findByRefreshToken(request.getRefreshToken())
+                .orElseThrow(() -> new IllegalArgumentException("토큰 정보를 찾을 수 없습니다."));
 
-        // 연관된 토큰 삭제
-        userTokenRepository.findByUserId(currentUserId).ifPresent(userTokenRepository::delete);
+        User user = userToken.getUser();
+        Authentication authentication = createAuthentication(user.getId());
 
-        // 유저 삭제
-        userRepository.delete(user);
+        String newAccessToken = tokenProvider.generateAccessToken(String.valueOf(user.getId()), authentication);
+
+        return UserDto.TokenResponse.of(newAccessToken, request.getRefreshToken(), user);
     }
 
-    // 인증 객체 생성
+    // 토큰 발급 공통 메서드
+    private UserDto.TokenResponse issueTokens(User user) {
+        Authentication authentication = createAuthentication(user.getId());
+
+        String accessToken = tokenProvider.generateAccessToken(String.valueOf(user.getId()), authentication);
+        String refreshToken = tokenProvider.generateRefreshToken(authentication);
+
+        UserToken userToken = userTokenRepository.findByUserId(user.getId())
+                .orElse(UserToken.builder().user(user).build());
+
+        userToken.updateRefreshToken(refreshToken);
+        userTokenRepository.save(userToken);
+
+        return UserDto.TokenResponse.of(accessToken, refreshToken, user);
+    }
+
+
+    public boolean checkNicknameDuplicate(String nickname) {
+        return userRepository.existsByNickname(nickname);
+    }
+
     private Authentication createAuthentication(Long userId) {
         return new UsernamePasswordAuthenticationToken(
                 userId.toString(),
@@ -127,18 +191,18 @@ public class UserService {
         );
     }
 
-    // ID로 유저 찾기
     private User findUserById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저입니다. id=" + userId));
     }
 
-    // 랜덤 닉네임 생성
-    private String generateUniqueNickname() {
-        String nickname;
-        do {
-            nickname = "Rabbit_" + UUID.randomUUID().toString().substring(0, 5);
-        } while (userRepository.existsByNickname(nickname));
-        return nickname;
+    @Transactional
+    public UserDto.UserInfo updatePersona(Long userId, Long personaId) {
+        User user = findUserById(userId);
+        Persona persona = personaRepository.findById(personaId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 페르소나입니다."));
+        user.selectPersona(persona.getId());
+
+        return UserDto.UserInfo.from(user);
     }
 }
