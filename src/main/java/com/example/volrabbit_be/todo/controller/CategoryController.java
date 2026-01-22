@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+
 
 @RestController
 @RequiredArgsConstructor
@@ -19,7 +21,7 @@ public class CategoryController {
     @PostMapping
     public ResponseEntity<CategoryDto.CreateResponse> create(
             Authentication authentication,
-            @RequestBody CategoryDto.CreateRequest request
+            @Valid @RequestBody CategoryDto.CreateRequest request
     ) {
         Long userId = extractUserId(authentication);
         CategoryDto.CreateResponse response = categoryService.create(userId, request);

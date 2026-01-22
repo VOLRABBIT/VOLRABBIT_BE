@@ -1,5 +1,7 @@
 package com.example.volrabbit_be.todo.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,6 +13,8 @@ public class CategoryDto {
     @Getter
     @NoArgsConstructor
     public static class CreateRequest {
+        @NotBlank(message = "카테고리 이름은 필수입니다.")
+        @Size(max = 10, message = "카테고리 이름은 10자 이내여야 합니다.")
         private String name;
     }
 
