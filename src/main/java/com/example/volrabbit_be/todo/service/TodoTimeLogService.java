@@ -1,5 +1,6 @@
 package com.example.volrabbit_be.todo.service;
 
+import com.example.volrabbit_be.global.exception.ApiExceptions;
 import com.example.volrabbit_be.todo.domain.Todo;
 import com.example.volrabbit_be.todo.domain.TodoTimeLog;
 import com.example.volrabbit_be.todo.dto.TodoDto;
@@ -25,7 +26,6 @@ public class TodoTimeLogService {
     private final TodoRepository todoRepository;
     private final TodoTimeLogRepository todoTimeLogRepository;
 
-    // ===== 기록 저장 =====
     @Transactional
     public TodoDto.TimeLogCreateResponse create(
             Long userId,
@@ -33,15 +33,15 @@ public class TodoTimeLogService {
             TodoDto.TimeLogCreateRequest request
     ) {
         if (request == null || request.getDurationSeconds() == null) {
-            throw new IllegalArgumentException("durationSeconds는 필수입니다.");
+            throw new ApiExceptions.BadRequest("durationSeconds는 필수입니다.");
         }
 
         long seconds = request.getDurationSeconds();
-        if (seconds <= 0) throw new IllegalArgumentException("durationSeconds는 0보다 커야 합니다.");
-        if (seconds > MAX_SECONDS) throw new IllegalArgumentException("durationSeconds가 너무 큽니다.");
+        if (seconds <= 0) throw new ApiExceptions.BadRequest("durationSeconds는 0보다 커야 합니다.");
+        if (seconds > MAX_SECONDS) throw new ApiExceptions.BadRequest("durationSeconds가 너무 큽니다.");
 
         Todo todo = todoRepository.findByIdAndUserId(todoId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("투두가 존재하지 않습니다."));
+                .orElseThrow(() -> new ApiExceptions.NotFound("투두가 존재하지 않습니다."));
 
         TodoTimeLog log = TodoTimeLog.builder()
                 .todo(todo)
@@ -60,10 +60,9 @@ public class TodoTimeLogService {
                 .build();
     }
 
-    // ===== 투두별 누적 =====
     public TodoDto.TimeLogSummaryResponse summary(Long userId, Long todoId) {
         todoRepository.findByIdAndUserId(todoId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("투두가 존재하지 않습니다."));
+                .orElseThrow(() -> new ApiExceptions.NotFound("투두가 존재하지 않습니다."));
 
         long totalSeconds = todoTimeLogRepository.sumDurationSecondsByTodoId(todoId);
 
@@ -73,9 +72,8 @@ public class TodoTimeLogService {
                 .build();
     }
 
-    // ===== 날짜별 누적 =====
     public TodoDto.DailyTimeSummaryResponse dailySummary(Long userId, LocalDate date) {
-        if (date == null) throw new IllegalArgumentException("date는 필수입니다.");
+        if (date == null) throw new ApiExceptions.BadRequest("date는 필수입니다.");
 
         long totalSeconds = todoTimeLogRepository.sumDurationSecondsByUserIdAndDate(userId, date);
 
@@ -85,14 +83,12 @@ public class TodoTimeLogService {
                 .build();
     }
 
-    // ===== 주차별 리포트 (총 시간 + TOP3 시간대) =====
     public TodoDto.WeeklyTimeReportResponse weeklyReport(Long userId, int year, int week) {
-        if (year < 2000 || year > 2100) throw new IllegalArgumentException("year가 올바르지 않습니다.");
-        if (week < 1 || week > 53) throw new IllegalArgumentException("week가 올바르지 않습니다.");
+        if (year < 2000 || year > 2100) throw new ApiExceptions.BadRequest("year가 올바르지 않습니다.");
+        if (week < 1 || week > 53) throw new ApiExceptions.BadRequest("week가 올바르지 않습니다.");
 
         WeekFields wf = WeekFields.ISO;
 
-        // ISO week 기준: 1월 4일이 포함된 주가 1주차
         LocalDate anchor = LocalDate.of(year, 1, 4);
         LocalDate weekStart = anchor
                 .with(wf.weekOfWeekBasedYear(), week)

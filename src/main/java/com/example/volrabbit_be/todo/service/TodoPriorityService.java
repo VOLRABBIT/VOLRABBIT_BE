@@ -1,6 +1,7 @@
 package com.example.volrabbit_be.todo.service;
 
 import com.example.volrabbit_be.global.ai.OpenAiClient;
+import com.example.volrabbit_be.global.exception.ApiExceptions;
 import com.example.volrabbit_be.todo.domain.Todo;
 import com.example.volrabbit_be.todo.domain.TodoPriority;
 import com.example.volrabbit_be.todo.domain.enumType.PriorityQuadrant;
@@ -26,6 +27,9 @@ public class TodoPriorityService {
 
     @Transactional
     public TodoDto.DailyPriorityResponse generate(Long userId, LocalDate date) {
+        if (date == null) {
+            throw new ApiExceptions.BadRequest("date는 필수입니다.");
+        }
         List<Todo> todos = todoRepository.findAllByUserIdAndDueDateOrderByIdAsc(userId, date);
 
         // 덮어쓰기 정책
@@ -109,6 +113,7 @@ public class TodoPriorityService {
                         .todoId(t.getId())
                         .content(t.getContent())
                         .quadrant(PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT)
+                        .quadrantLabel(PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT.label())
                         .priorityOrder(i)
                         .build());
                 i++;
@@ -117,7 +122,9 @@ public class TodoPriorityService {
         }
 
         JsonNode items = result.get("items");
-        if (items == null || !items.isArray()) throw new IllegalStateException("우선순위 결과 items가 올바르지 않습니다.");
+        if (items == null || !items.isArray()) {
+            throw new RuntimeException("우선순위 결과 items가 올바르지 않습니다.");
+        }
 
         Map<Long, Todo> todoMap = new HashMap<>();
         for (Todo t : todos) todoMap.put(t.getId(), t);
@@ -132,7 +139,12 @@ public class TodoPriorityService {
             Todo todo = todoMap.get(todoId);
             if (todo == null) continue;
 
-            PriorityQuadrant quadrant = PriorityQuadrant.valueOf(quadrantStr);
+            PriorityQuadrant quadrant;
+            try {
+                quadrant = PriorityQuadrant.valueOf(quadrantStr);
+            } catch (Exception ex) {
+                throw new RuntimeException("우선순위 결과 quadrant 값이 올바르지 않습니다.");
+            }
 
             todoPriorityRepository.save(
                     TodoPriority.builder()
@@ -152,7 +164,6 @@ public class TodoPriorityService {
                     .build());
         }
 
-        // priorityOrder 정렬
         response.sort(Comparator.comparingInt(TodoDto.PriorityItem::getPriorityOrder));
 
         return TodoDto.DailyPriorityResponse.builder()
@@ -162,7 +173,12 @@ public class TodoPriorityService {
     }
 
     public TodoDto.DailyPriorityResponse get(Long userId, LocalDate date) {
-        List<TodoPriority> rows = todoPriorityRepository.findAllByTodoUserIdAndPriorityDateOrderByPriorityOrderAsc(userId, date);
+        if (date == null) {
+            throw new ApiExceptions.BadRequest("date는 필수입니다.");
+        }
+
+        List<TodoPriority> rows = todoPriorityRepository
+                .findAllByTodoUserIdAndPriorityDateOrderByPriorityOrderAsc(userId, date);
 
         List<TodoDto.PriorityItem> items = new ArrayList<>();
         for (TodoPriority row : rows) {
@@ -185,15 +201,19 @@ public class TodoPriorityService {
 
     @Transactional
     public void reorder(Long userId, LocalDate date, TodoDto.PriorityReorderRequest request) {
+        if (date == null) throw new ApiExceptions.BadRequest("date는 필수입니다.");
         if (request == null || request.getOrders() == null) return;
 
         for (TodoDto.PriorityReorderRequest.OrderPatch patch : request.getOrders()) {
-            TodoPriority row = todoPriorityRepository.findByTodoIdAndPriorityDate(patch.getTodoId(), date)
-                    .orElseThrow(() -> new IllegalArgumentException("우선순위 데이터가 존재하지 않습니다. todoId=" + patch.getTodoId()));
+            if (patch == null || patch.getTodoId() == null || patch.getPriorityOrder() == null) {
+                throw new ApiExceptions.BadRequest("orders의 todoId/priorityOrder는 필수입니다.");
+            }
 
-            // user 검증: row.todo.user.id == userId
+            TodoPriority row = todoPriorityRepository.findByTodoIdAndPriorityDate(patch.getTodoId(), date)
+                    .orElseThrow(() -> new ApiExceptions.NotFound("우선순위 데이터가 존재하지 않습니다. todoId=" + patch.getTodoId()));
+
             if (!row.getTodo().getUser().getId().equals(userId)) {
-                throw new IllegalArgumentException("권한이 없습니다.");
+                throw new ApiExceptions.Unauthorized("권한이 없습니다.");
             }
 
             row.updateOrder(patch.getPriorityOrder());

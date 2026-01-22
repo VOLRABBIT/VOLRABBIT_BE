@@ -1,5 +1,6 @@
 package com.example.volrabbit_be.todo.service;
 
+import com.example.volrabbit_be.global.exception.ApiExceptions;
 import com.example.volrabbit_be.todo.domain.Todo;
 import com.example.volrabbit_be.todo.domain.TodoStep;
 import com.example.volrabbit_be.todo.domain.enumType.todoStatus;
@@ -21,17 +22,17 @@ public class TodoStepService {
     @Transactional
     public TodoDto.StatusResponse toggleStep(Long userId, Long todoId, Long stepId) {
         Todo todo = todoRepository.findByIdAndUserId(todoId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("투두가 존재하지 않습니다."));
+                .orElseThrow(() -> new ApiExceptions.NotFound("투두가 존재하지 않습니다."));
 
         TodoStep step = todoStepRepository.findById(stepId)
-                .orElseThrow(() -> new IllegalArgumentException("세분화 단계가 존재하지 않습니다."));
+                .orElseThrow(() -> new ApiExceptions.NotFound("세분화 단계가 존재하지 않습니다."));
 
         if (!step.getTodo().getId().equals(todo.getId())) {
-            throw new IllegalArgumentException("해당 투두의 세분화 단계가 아닙니다.");
+            throw new ApiExceptions.BadRequest("해당 투두의 세분화 단계가 아닙니다.");
         }
 
         if (todo.getTodoStatus() != todoStatus.IN_PROGRESS) {
-            throw new IllegalStateException("진행 중인 투두에서만 세분화 단계를 완료할 수 있습니다.");
+            throw new ApiExceptions.Conflict("진행 중인 투두에서만 세분화 단계를 완료할 수 있습니다.");
         }
 
         step.toggleComplete();

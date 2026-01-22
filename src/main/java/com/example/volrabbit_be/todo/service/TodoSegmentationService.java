@@ -1,6 +1,7 @@
 package com.example.volrabbit_be.todo.service;
 
 import com.example.volrabbit_be.global.ai.OpenAiClient;
+import com.example.volrabbit_be.global.exception.ApiExceptions;
 import com.example.volrabbit_be.todo.domain.Todo;
 import com.example.volrabbit_be.todo.domain.TodoStep;
 import com.example.volrabbit_be.todo.domain.enumType.SegmentationType;
@@ -28,9 +29,8 @@ public class TodoSegmentationService {
         if (segmentationType == null || segmentationType == SegmentationType.NONE) return;
 
         Todo todo = todoRepository.findByIdAndUserId(todoId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("투두가 존재하지 않습니다."));
+                .orElseThrow(() -> new ApiExceptions.NotFound("투두가 존재하지 않습니다."));
 
-        // 정책: 재생성 시 기존 steps 삭제 후 새로 생성
         todoStepRepository.deleteAllByTodoId(todo.getId());
 
         int targetCount = switch (segmentationType) {
@@ -72,19 +72,29 @@ public class TodoSegmentationService {
                 )
         );
 
-        JsonNode result = openAiClient.callStructured(instructions, userInput, schema);
+        JsonNode result;
+        try {
+            result = openAiClient.callStructured(instructions, userInput, schema);
+        } catch (Exception e) {
+            // 세분화 AI 호출 실패는 "서버 기능 실패"라 500이 맞음
+            throw new RuntimeException("세분화 AI 호출에 실패했습니다.");
+        }
+
         JsonNode steps = result.get("steps");
         if (steps == null || !steps.isArray()) {
-            throw new IllegalStateException("세분화 결과 steps가 올바르지 않습니다.");
+            throw new RuntimeException("세분화 결과 steps가 올바르지 않습니다.");
         }
 
         if (targetCount > 0 && steps.size() != targetCount) {
-            throw new IllegalStateException("세분화 결과 단계 수가 요청과 다릅니다.");
+            throw new RuntimeException("세분화 결과 단계 수가 요청과 다릅니다.");
         }
 
         long order = 1L;
         for (JsonNode step : steps) {
             String content = step.get("content").asText();
+            if (content == null || content.isBlank()) {
+                throw new RuntimeException("세분화 결과 content가 올바르지 않습니다.");
+            }
 
             TodoStep entity = TodoStep.builder()
                     .todo(todo)

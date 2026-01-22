@@ -1,5 +1,6 @@
 package com.example.volrabbit_be.todo.service;
 
+import com.example.volrabbit_be.global.exception.ApiExceptions;
 import com.example.volrabbit_be.todo.domain.Category;
 import com.example.volrabbit_be.todo.dto.CategoryDto;
 import com.example.volrabbit_be.todo.repository.CategoryRepository;
@@ -22,10 +23,10 @@ public class CategoryService {
     @Transactional
     public CategoryDto.CreateResponse create(Long userId, CategoryDto.CreateRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자가 존재하지 않습니다."));
+                .orElseThrow(() -> new ApiExceptions.NotFound("사용자가 존재하지 않습니다."));
 
         if (categoryRepository.existsByUserIdAndNameAndIsActiveTrue(userId, request.getName())) {
-            throw new IllegalArgumentException("이미 존재하는 카테고리 이름입니다.");
+            throw new ApiExceptions.Conflict("이미 존재하는 카테고리 이름입니다.");
         }
 
         Category category = Category.builder()
@@ -43,10 +44,10 @@ public class CategoryService {
     @Transactional
     public CategoryDto.DeleteResponse delete(Long userId, Long categoryId) {
         Category category = categoryRepository.findByIdAndUserId(categoryId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("카테고리가 존재하지 않습니다."));
+                .orElseThrow(() -> new ApiExceptions.NotFound("카테고리가 존재하지 않습니다."));
 
         if (!category.isActive()) {
-            throw new IllegalArgumentException("이미 삭제(비활성화)된 카테고리입니다.");
+            throw new ApiExceptions.Conflict("이미 삭제(비활성화)된 카테고리입니다.");
         }
 
         category.deactivate();
@@ -57,7 +58,6 @@ public class CategoryService {
                 .build();
     }
 
-    // 카테고리 목록 조회(isActive=true)
     public CategoryDto.ListResponse getAll(Long userId) {
         List<CategoryDto.CategoryResponse> categories = categoryRepository
                 .findAllByUserIdAndIsActiveTrueOrderByIdAsc(userId)
@@ -70,10 +70,9 @@ public class CategoryService {
                 .build();
     }
 
-    // 카테고리 단건 조회(isActive=true, 활성화된 카테고리만 조회 가능)
     public CategoryDto.CategoryResponse getOne(Long userId, Long categoryId) {
         Category category = categoryRepository.findByIdAndUserIdAndIsActiveTrue(categoryId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("카테고리가 존재하지 않습니다."));
+                .orElseThrow(() -> new ApiExceptions.NotFound("카테고리가 존재하지 않습니다."));
 
         return toResponse(category);
     }
