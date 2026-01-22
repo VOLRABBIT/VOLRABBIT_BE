@@ -27,7 +27,8 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.Base64;
+import java.math.BigInteger;
+import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,6 +47,11 @@ public class AuthService {
     // === KAKAO CONFIG ===
     @Value("${spring.security.oauth2.client.registration.kakao.client-id:}")
     private String kakaoClientId;
+
+    // ▼ [수정 1] 여기에 client-secret 변수를 추가했습니다!
+    @Value("${spring.security.oauth2.client.registration.kakao.client-secret:}")
+    private String kakaoClientSecret;
+
     @Value("${spring.security.oauth2.client.registration.kakao.redirect-uri:}")
     private String kakaoRedirectUri;
 
@@ -57,13 +63,13 @@ public class AuthService {
     @Value("${spring.security.oauth2.client.registration.google.redirect-uri:}")
     private String googleRedirectUri;
 
-    // === APPLE CONFIG ===
-    @Value("${spring.security.oauth2.client.registration.apple.client-id:}")
-    private String appleClientId;
-    @Value("${spring.security.oauth2.client.registration.apple.redirect-uri:}")
-    private String appleRedirectUri;
-    @Value("${spring.security.oauth2.client.registration.apple.client-secret:}")
-    private String appleClientSecret;
+    // === NAVER CONFIG  ===
+    @Value("${spring.security.oauth2.client.registration.naver.client-id:}")
+    private String naverClientId;
+    @Value("${spring.security.oauth2.client.registration.naver.client-secret:}")
+    private String naverClientSecret;
+    @Value("${spring.security.oauth2.client.registration.naver.redirect-uri:}")
+    private String naverRedirectUri;
 
     // 소셜 로그인 인증 URL 생성
     public String getSocialLoginUrl(String provider) {
@@ -77,12 +83,14 @@ public class AuthService {
                     + "&redirect_uri=" + googleRedirectUri
                     + "&response_type=code"
                     + "&scope=email%20profile";
-            case "APPLE" -> "https://appleid.apple.com/auth/authorize"
-                    + "?client_id=" + appleClientId
-                    + "&redirect_uri=" + appleRedirectUri
-                    + "&response_type=code"
-                    + "&response_mode=form_post"
-                    + "&scope=name%20email";
+            case "NAVER" -> {
+                String state = generateState();
+                yield "https://nid.naver.com/oauth2.0/authorize"
+                        + "?response_type=code"
+                        + "&client_id=" + naverClientId
+                        + "&redirect_uri=" + naverRedirectUri
+                        + "&state=" + state;
+            }
             default -> throw new IllegalArgumentException("지원하지 않는 소셜 로그인입니다.");
         };
     }
@@ -94,7 +102,7 @@ public class AuthService {
         SocialUserInfo userInfo = switch (provider.toUpperCase()) {
             case "KAKAO" -> processKakao(code);
             case "GOOGLE" -> processGoogle(code);
-            case "APPLE" -> processApple(code);
+            case "NAVER" -> processNaver(code);
             default -> throw new IllegalArgumentException("지원하지 않는 소셜 로그인입니다.");
         };
 
@@ -162,6 +170,8 @@ public class AuthService {
         body.add("redirect_uri", kakaoRedirectUri);
         body.add("code", code);
 
+        body.add("client_secret", kakaoClientSecret);
+
         return requestToken("https://kauth.kakao.com/oauth/token", body, headers);
     }
 
@@ -226,48 +236,53 @@ public class AuthService {
         }
     }
 
-    private SocialUserInfo processApple(String code) {
-        String idToken = getAppleIdToken(code);
-        return decodeAppleIdToken(idToken);
+    private SocialUserInfo processNaver(String code) {
+        String accessToken = getNaverToken(code);
+        return getNaverUserInfo(accessToken);
     }
 
-    private String getAppleIdToken(String code) {
+    private String getNaverToken(String code) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Content-type", "application/x-www-form-urlencoded");
 
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "authorization_code");
-        body.add("client_id", appleClientId);
-        body.add("client_secret", appleClientSecret);
-        body.add("redirect_uri", appleRedirectUri);
-        body.add("code", code);
+        String state = generateState();
 
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+        String url = "https://nid.naver.com/oauth2.0/token?grant_type=authorization_code"
+                + "&client_id=" + naverClientId
+                + "&client_secret=" + naverClientSecret
+                + "&code=" + code
+                + "&state=" + state;
+
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, null, String.class);
+
+        try {
+            JsonNode json = objectMapper.readTree(response.getBody());
+            return json.get("access_token").asText();
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Naver Token Parsing Failed", e);
+        }
+    }
+
+    private SocialUserInfo getNaverUserInfo(String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Authorization", "Bearer " + accessToken);
+
         ResponseEntity<String> response = restTemplate.exchange(
-                "https://appleid.apple.com/auth/token", HttpMethod.POST, request, String.class
+                "https://openapi.naver.com/v1/nid/me", HttpMethod.GET, new HttpEntity<>(headers), String.class
         );
 
         try {
             JsonNode json = objectMapper.readTree(response.getBody());
-            return json.get("id_token").asText();
+            JsonNode responseNode = json.get("response");
+
+            String id = responseNode.get("id").asText();
+            String email = responseNode.get("email").asText();
+            String nickname = responseNode.has("nickname")
+                    ? responseNode.get("nickname").asText()
+                    : responseNode.get("name").asText();
+
+            return new SocialUserInfo(id, email, nickname);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Apple Token Parsing Failed", e);
-        }
-    }
-
-    private SocialUserInfo decodeAppleIdToken(String idToken) {
-        try {
-            String[] parts = idToken.split("\\.");
-            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
-            JsonNode json = objectMapper.readTree(payload);
-
-            String sub = json.get("sub").asText();
-            String email = json.get("email").asText();
-            String nickname = email.split("@")[0];
-
-            return new SocialUserInfo(sub, email, nickname);
-        } catch (Exception e) {
-            throw new RuntimeException("Apple ID Token Decoding Failed", e);
+            throw new RuntimeException("Naver UserInfo Parsing Failed", e);
         }
     }
 
@@ -280,6 +295,11 @@ public class AuthService {
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Token Parsing Failed", e);
         }
+    }
+
+    private String generateState() {
+        SecureRandom random = new SecureRandom();
+        return new BigInteger(130, random).toString(32);
     }
 
     private UserDto.TokenResponse issueTokens(User user) {
