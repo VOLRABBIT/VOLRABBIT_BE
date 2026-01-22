@@ -2,19 +2,13 @@ name: Deploy to Server
 
 on:
   push:
-    # 1. 이미지 빌드 설정
-    # build: . 은 "현재 폴더에 있는 Dockerfile로 빌드해라"라는 뜻입니다.
-    # (선택) 만약 도커 허브 이미지를 바로 쓸 거라면 build 대신 아래를 씁니다.
-    # image: [본인_도커허브_아이디]/volrabbit-server
-
-    # 2. 컨테이너 이름 (선택 사항)
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1. 체크아웃 및 자바 빌드
       - uses: actions/checkout@v3
 
       - name: Set up JDK 21
@@ -26,15 +20,22 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # Key 파일 생성
+      - name: Make key files
+        env:
+          PRIVATE_PEM: ${{ secrets.PRIVATE_PEM }}
+          PUBLIC_PEM: ${{ secrets.PUBLIC_PEM }}
+        run: |
+          mkdir -p src/main/resources/keys
+          if [ -n "$PRIVATE_PEM" ]; then echo "$PRIVATE_PEM" > src/main/resources/keys/private.pem; fi
+          if [ -n "$PUBLIC_PEM" ]; then echo "$PUBLIC_PEM" > src/main/resources/keys/public.pem; fi
+
       - name: Build with Gradle
         run: ./gradlew clean build -x test
 
-      # 2. 배포 파일 패키징 (Jar + 설정파일)
-      # .env는 서버에서 직접 만들 것이므로 포함하지 않습니다.
       - name: Make tar file
         run: tar -cvf deploy.tar docker-compose.yml Dockerfile build/libs/*.jar
 
-      # 3. 서버로 파일 전송 (SCP)
       - name: Copy files to server
         uses: appleboy/scp-action@master
         with:
@@ -44,53 +45,72 @@ jobs:
           source: "deploy.tar"
           target: "/home/${{ secrets.USERNAME }}/app"
 
-      # 4. 서버에 .env 파일 생성
-      - name: Create .env file on server
+      - name: Deploy on server
         uses: appleboy/ssh-action@master
-
+        env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           PRIVATE_PEM: ${{ secrets.PRIVATE_PEM }}
-          OAUTH2_CLIENT_ID: ${{ secrets.OAUTH2_CLIENT_ID }}
-          OAUTH2_CLIENT_SECRET: ${{ secrets.OAUTH2_CLIENT_SECRET }}
+
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_REDIRECT_URI: ${{ secrets.KAKAO_REDIRECT_URI }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
+          APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
+          APPLE_CLIENT_SECRET: ${{ secrets.APPLE_CLIENT_SECRET }}
+          APPLE_REDIRECT_URI: ${{ secrets.APPLE_REDIRECT_URI }}
+
+
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
+          AWS_REGION: 'ap-northeast-2'
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
-          envs: DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,PRIVATE_PEM,OAUTH2_CLIENT_ID,OAUTH2_CLIENT_SECRET
+          envs: DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,PRIVATE_PEM,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_CLIENT_ID,APPLE_CLIENT_SECRET,APPLE_REDIRECT_URI,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET_NAME,AWS_REGION
           script: |
+            set -e
+
+            mkdir -p /home/${{ secrets.USERNAME }}/app
             cd /home/${{ secrets.USERNAME }}/app
-            
+
+            tar -xvf deploy.tar
+
             cat > .env << EOF
-            # ==================== 데이터베이스 설정 ====================
-            DB_HOST=$DB_HOST
+            DB_HOST=db
             DB_PORT=$DB_PORT
             DB_NAME=$DB_NAME
             DB_USERNAME=$DB_USERNAME
             DB_PASSWORD=$DB_PASSWORD
-
-
-      # 5. 배포 실행 (2번 스타일처럼 실행 단계 분리)
-      - name: Deploy on server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.KEY }}
-          script: |
-            cd /home/${{ secrets.USERNAME }}/app
+            JWT_SECRET_KEY="$PRIVATE_PEM"
             
-            # 압축 풀기
-            tar -xvf deploy.tar
+            KAKAO_CLIENT_ID=$KAKAO_CLIENT_ID
+            KAKAO_CLIENT_SECRET=$KAKAO_CLIENT_SECRET
+            KAKAO_REDIRECT_URI=$KAKAO_REDIRECT_URI
+            GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+            GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI
+            APPLE_CLIENT_ID=$APPLE_CLIENT_ID
+            APPLE_CLIENT_SECRET=$APPLE_CLIENT_SECRET
+            APPLE_REDIRECT_URI=$APPLE_REDIRECT_URI
 
-            # Docker Compose 재시작
-            # (같은 폴더의 .env를 자동으로 읽습니다)
-            docker-compose down
-            docker-compose up -d --build
-            
-            # 청소
+            AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+            AWS_S3_BUCKET_NAME=$AWS_S3_BUCKET_NAME
+            AWS_REGION=$AWS_REGION
+            EOF
+            chmod 600 .env
+
+            docker compose down
+            docker compose build
+            docker compose up -d
+
             rm deploy.tar
             docker image prune -f
