@@ -26,7 +26,9 @@ public class TodoDto {
     @Getter
     @Builder
     public static class CreateResponse {
-        private Long todoId;
+        private Long todoId;            // 생성된 것 중 "첫 번째(가장 빠른 날짜)" 투두 ID
+        private String repeatGroupId;   // 반복이면 UUID, NONE이면 null
+        private Integer createdCount;   // 이번 요청으로 생성된 투두 개수
     }
 
     @Getter
@@ -69,6 +71,7 @@ public class TodoDto {
 
         private DueType dueType;
         private RepeatType repeatType;
+        private String repeatGroupId;
         private SegmentationType segmentationType;
         private VerificationType verificationType;
 
@@ -88,6 +91,7 @@ public class TodoDto {
 
         private DueType dueType;
         private RepeatType repeatType;
+        private String repeatGroupId;
         private SegmentationType segmentationType;
         private VerificationType verificationType;
 
@@ -215,6 +219,23 @@ public class TodoDto {
     @NoArgsConstructor
     public static class AiSegmentationRequest {
         private SegmentationType segmentationType; // TWO/THREE/AUTO
+    }
+
+    // 세분화 Step 조회 DTO
+    @Getter
+    @Builder
+    public static class StepResponse {
+        private Long stepId;
+        private String content;
+        private boolean completed;
+        private Long stepOrder;
+    }
+
+    @Getter
+    @Builder
+    public static class StepListResponse {
+        private Long todoId;
+        private List<StepResponse> steps;
     }
 
     // 우선순위(사분면)

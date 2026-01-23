@@ -72,10 +72,19 @@ public class TodoTimeLogService {
                 .build();
     }
 
+    /**
+     * 날짜별 누적 시간 조회 (유저 기준)
+     * H2 호환을 위해 DATE() 함수 대신 하루 범위로 조회
+     */
     public TodoDto.DailyTimeSummaryResponse dailySummary(Long userId, LocalDate date) {
         if (date == null) throw new ApiExceptions.BadRequest("date는 필수입니다.");
 
-        long totalSeconds = todoTimeLogRepository.sumDurationSecondsByUserIdAndDate(userId, date);
+        LocalDateTime startInclusive = date.atStartOfDay();
+        LocalDateTime endExclusive = date.plusDays(1).atStartOfDay();
+
+        long totalSeconds = todoTimeLogRepository.sumDurationSecondsByUserIdAndDateRange(
+                userId, startInclusive, endExclusive
+        );
 
         return TodoDto.DailyTimeSummaryResponse.builder()
                 .date(date)

@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -19,6 +21,28 @@ public class TodoStepService {
     private final TodoRepository todoRepository;
     private final TodoStepRepository todoStepRepository;
 
+    /**
+     * 특정 투두의 세분화 step 목록 조회
+     */
+    public TodoDto.StepListResponse getSteps(Long userId, Long todoId) {
+        Todo todo = todoRepository.findByIdAndUserId(todoId, userId)
+                .orElseThrow(() -> new ApiExceptions.NotFound("투두가 존재하지 않습니다."));
+
+        List<TodoDto.StepResponse> steps = todoStepRepository
+                .findAllByTodoIdOrderByStepOrderAsc(todo.getId())
+                .stream()
+                .map(this::toStepResponse)
+                .toList();
+
+        return TodoDto.StepListResponse.builder()
+                .todoId(todo.getId())
+                .steps(steps)
+                .build();
+    }
+
+    /**
+     * todo_step을 토글하고, 모든 step이 완료되면 todo를 자동으로 SUCCESS 처리
+     */
     @Transactional
     public TodoDto.StatusResponse toggleStep(Long userId, Long todoId, Long stepId) {
         Todo todo = todoRepository.findByIdAndUserId(todoId, userId)
@@ -45,6 +69,15 @@ public class TodoStepService {
         return TodoDto.StatusResponse.builder()
                 .todoId(todo.getId())
                 .todoStatus(todo.getTodoStatus())
+                .build();
+    }
+
+    private TodoDto.StepResponse toStepResponse(TodoStep step) {
+        return TodoDto.StepResponse.builder()
+                .stepId(step.getId())
+                .content(step.getContent())
+                .completed(step.isCompleted())
+                .stepOrder(step.getStepOrder())
                 .build();
     }
 }

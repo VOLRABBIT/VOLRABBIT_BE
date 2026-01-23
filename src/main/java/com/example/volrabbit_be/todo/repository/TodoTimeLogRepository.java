@@ -6,7 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,16 +18,23 @@ public interface TodoTimeLogRepository extends JpaRepository<TodoTimeLog, Long> 
     """)
     long sumDurationSecondsByTodoId(@Param("todoId") Long todoId);
 
-    // 날짜별 누적 (유저 기준)
+    /**
+     * 날짜별 누적 (유저 기준)
+     * H2에서 DATE() 함수가 없어서 function('date', ...) 대신 "하루 범위"로 조회
+     * - startInclusive: 해당 날짜 00:00:00
+     * - endExclusive: 다음 날짜 00:00:00
+     */
     @Query("""
         select coalesce(sum(t.durationSeconds), 0)
         from TodoTimeLog t
         where t.todo.user.id = :userId
-          and function('date', t.createdDate) = :date
+          and t.createdDate >= :startInclusive
+          and t.createdDate < :endExclusive
     """)
-    long sumDurationSecondsByUserIdAndDate(
+    long sumDurationSecondsByUserIdAndDateRange(
             @Param("userId") Long userId,
-            @Param("date") LocalDate date
+            @Param("startInclusive") LocalDateTime startInclusive,
+            @Param("endExclusive") LocalDateTime endExclusive
     );
 
     // 기간(주차) 총 누적 (유저 기준)

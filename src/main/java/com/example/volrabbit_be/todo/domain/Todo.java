@@ -43,6 +43,9 @@ public class Todo extends BaseTimeEntity {
     @Column(nullable = false)
     private RepeatType repeatType;
 
+    @Column(name = "repeat_group_id", length = 36)
+    private String repeatGroupId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SegmentationType segmentationType;
@@ -67,6 +70,7 @@ public class Todo extends BaseTimeEntity {
             LocalDate dueDate,
             DueType dueType,
             RepeatType repeatType,
+            String repeatGroupId,
             SegmentationType segmentationType,
             VerificationType verificationType,
             Long retryFromTodoId
@@ -77,6 +81,7 @@ public class Todo extends BaseTimeEntity {
         this.dueDate = dueDate;
         this.dueType = dueType;
         this.repeatType = repeatType;
+        this.repeatGroupId = repeatGroupId;
         this.segmentationType = segmentationType;
         this.verificationType = verificationType;
         this.todoStatus = todoStatus.IN_PROGRESS;
@@ -93,6 +98,7 @@ public class Todo extends BaseTimeEntity {
             LocalDate dueDate,
             DueType dueType,
             RepeatType repeatType,
+            String repeatGroupId,
             SegmentationType segmentationType,
             VerificationType verificationType
     ) {
@@ -101,6 +107,7 @@ public class Todo extends BaseTimeEntity {
         this.dueDate = dueDate;
         this.dueType = dueType;
         this.repeatType = repeatType;
+        this.repeatGroupId = repeatGroupId;
         this.segmentationType = segmentationType;
         this.verificationType = verificationType;
     }
@@ -111,6 +118,7 @@ public class Todo extends BaseTimeEntity {
             LocalDate dueDate,
             DueType dueType,
             RepeatType repeatType,
+            String repeatGroupId,
             SegmentationType segmentationType,
             VerificationType verificationType
     ) {
@@ -119,6 +127,9 @@ public class Todo extends BaseTimeEntity {
         if (dueType != null) this.dueType = dueType;
         if (dueDate != null) this.dueDate = dueDate;
         if (repeatType != null) this.repeatType = repeatType;
+        if (repeatGroupId != null || (repeatType == RepeatType.NONE)) {
+            this.repeatGroupId = repeatGroupId;
+        }
         if (segmentationType != null) this.segmentationType = segmentationType;
         if (verificationType != null) this.verificationType = verificationType;
     }
@@ -163,9 +174,9 @@ public class Todo extends BaseTimeEntity {
                 .dueDate(newDueDate)
                 .dueType(newDueType)
                 .repeatType(this.repeatType)
+                .repeatGroupId(this.repeatGroupId)
                 .segmentationType(this.segmentationType)
                 .verificationType(this.verificationType)
-                // 재도전 투두 표식
                 .retryFromTodoId(this.id)
                 .build();
     }

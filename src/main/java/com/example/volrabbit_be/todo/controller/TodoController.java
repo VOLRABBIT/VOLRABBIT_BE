@@ -55,14 +55,13 @@ public class TodoController {
 
     @Operation(summary = "투두 수정", description = "경로 변수로 받은 todoId로 이전에 작성한 투두가 불러와지며 수정 가능합니다.")
     @PatchMapping("/{todoId}")
-    public ResponseEntity<TodoDto.UpdateResponse> update(
+    public ResponseEntity<TodoDto.DetailResponse> update(
             @PathVariable Long todoId,
             @RequestBody TodoDto.UpdateRequest request
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
         return ResponseEntity.ok(todoService.update(userId, todoId, request));
     }
-
     @Operation(summary = "상태 값 변화(complete)",
             description = "(인증 API가 있어서 아마 사용되진 않을 것 같은데, 혹시 몰라서 구현해뒀습니다.)" +
                     "투두 생성시 선택했던 방식으로 인증이 완료됐다면 " +

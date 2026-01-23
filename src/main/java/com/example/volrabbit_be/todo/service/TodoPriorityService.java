@@ -10,12 +10,14 @@ import com.example.volrabbit_be.todo.repository.TodoPriorityRepository;
 import com.example.volrabbit_be.todo.repository.TodoRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -27,9 +29,8 @@ public class TodoPriorityService {
 
     @Transactional
     public TodoDto.DailyPriorityResponse generate(Long userId, LocalDate date) {
-        if (date == null) {
-            throw new ApiExceptions.BadRequest("date는 필수입니다.");
-        }
+        if (date == null) throw new ApiExceptions.BadRequest("date는 필수입니다.");
+
         List<Todo> todos = todoRepository.findAllByUserIdAndDueDateOrderByIdAsc(userId, date);
 
         // 덮어쓰기 정책
@@ -61,7 +62,8 @@ public class TodoPriorityService {
         String userInput =
                 sb +
                         "\n반환 형식: {\"items\":[{\"todoId\":1,\"quadrant\":\"URGENT_IMPORTANT\",\"priorityOrder\":0}, ...]}\n" +
-                        "규칙: 입력에 있던 todoId만 포함하고 priorityOrder는 0..n-1로 중복 없이.";
+                        "규칙: 입력에 있던 todoId만 포함하고, items 길이는 입력 todo 개수와 동일해야 하며, " +
+                        "priorityOrder는 0..n-1을 중복 없이 모두 포함해.";
 
         Map<String, Object> schema = Map.of(
                 "type", "object",
@@ -70,7 +72,8 @@ public class TodoPriorityService {
                 "properties", Map.of(
                         "items", Map.of(
                                 "type", "array",
-                                "minItems", 1,
+                                "minItems", todos.size(),
+                                "maxItems", todos.size(),
                                 "items", Map.of(
                                         "type", "object",
                                         "additionalProperties", false,
@@ -97,74 +100,76 @@ public class TodoPriorityService {
         try {
             result = openAiClient.callStructured(instructions, userInput, schema);
         } catch (Exception e) {
-            // AI 실패 fallback: id 순서대로 NOT_URGENT_NOT_IMPORTANT
-            List<TodoDto.PriorityItem> fallback = new ArrayList<>();
-            int i = 0;
-            for (Todo t : todos) {
-                todoPriorityRepository.save(
-                        TodoPriority.builder()
-                                .todo(t)
-                                .priorityDate(date)
-                                .priorityQuadrant(PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT)
-                                .priorityOrder(i)
-                                .build()
-                );
-                fallback.add(TodoDto.PriorityItem.builder()
-                        .todoId(t.getId())
-                        .content(t.getContent())
-                        .quadrant(PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT)
-                        .quadrantLabel(PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT.label())
-                        .priorityOrder(i)
-                        .build());
-                i++;
-            }
-            return TodoDto.DailyPriorityResponse.builder().date(date).items(fallback).build();
+            log.error("AI priority call failed", e);
+            return fallbackSaveAndReturn(todos, date);
         }
 
-        JsonNode items = result.get("items");
-        if (items == null || !items.isArray()) {
-            throw new RuntimeException("우선순위 결과 items가 올바르지 않습니다.");
+        JsonNode itemsNode = result.get("items");
+        if (itemsNode == null || !itemsNode.isArray()) {
+            // AI가 이상하게 주면 fallback
+            log.error("AI priority result invalid: items missing");
+            return fallbackSaveAndReturn(todos, date);
         }
 
         Map<Long, Todo> todoMap = new HashMap<>();
         for (Todo t : todos) todoMap.put(t.getId(), t);
 
-        List<TodoDto.PriorityItem> response = new ArrayList<>();
+        // 1) 파싱해서 todoId별로 1개만 남기기 (중복 방지)
+        Map<Long, AiPriority> parsed = new HashMap<>();
+        for (JsonNode it : itemsNode) {
+            JsonNode todoIdNode = it.get("todoId");
+            JsonNode quadNode = it.get("quadrant");
+            JsonNode orderNode = it.get("priorityOrder");
+            if (todoIdNode == null || quadNode == null || orderNode == null) continue;
 
-        for (JsonNode it : items) {
-            long todoId = it.get("todoId").asLong();
-            String quadrantStr = it.get("quadrant").asText();
-            int order = it.get("priorityOrder").asInt();
-
+            long todoId = todoIdNode.asLong();
             Todo todo = todoMap.get(todoId);
             if (todo == null) continue;
 
             PriorityQuadrant quadrant;
             try {
-                quadrant = PriorityQuadrant.valueOf(quadrantStr);
+                quadrant = PriorityQuadrant.valueOf(quadNode.asText());
             } catch (Exception ex) {
-                throw new RuntimeException("우선순위 결과 quadrant 값이 올바르지 않습니다.");
+                continue;
             }
 
+            int order = orderNode.asInt();
+            parsed.put(todoId, new AiPriority(todo, quadrant, order));
+        }
+
+        // 2) 누락된 todo는 뒤에 붙이고, order는 0..n-1로 재부여(중복/이상치 방지)
+        List<AiPriority> list = new ArrayList<>(parsed.values());
+        list.sort(Comparator.comparingInt(a -> a.orderHint));
+
+        for (Todo t : todos) {
+            if (!parsed.containsKey(t.getId())) {
+                // 누락된 건 뒤로
+                list.add(new AiPriority(t, PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT, Integer.MAX_VALUE));
+            }
+        }
+
+        List<TodoDto.PriorityItem> response = new ArrayList<>();
+        int order = 0;
+        for (AiPriority ap : list) {
             todoPriorityRepository.save(
                     TodoPriority.builder()
-                            .todo(todo)
+                            .todo(ap.todo)
                             .priorityDate(date)
-                            .priorityQuadrant(quadrant)
+                            .priorityQuadrant(ap.quadrant)
                             .priorityOrder(order)
                             .build()
             );
 
             response.add(TodoDto.PriorityItem.builder()
-                    .todoId(todo.getId())
-                    .content(todo.getContent())
-                    .quadrant(quadrant)
-                    .quadrantLabel(quadrant.label())
+                    .todoId(ap.todo.getId())
+                    .content(ap.todo.getContent())
+                    .quadrant(ap.quadrant)
+                    .quadrantLabel(ap.quadrant.label())
                     .priorityOrder(order)
                     .build());
-        }
 
-        response.sort(Comparator.comparingInt(TodoDto.PriorityItem::getPriorityOrder));
+            order++;
+        }
 
         return TodoDto.DailyPriorityResponse.builder()
                 .date(date)
@@ -173,9 +178,7 @@ public class TodoPriorityService {
     }
 
     public TodoDto.DailyPriorityResponse get(Long userId, LocalDate date) {
-        if (date == null) {
-            throw new ApiExceptions.BadRequest("date는 필수입니다.");
-        }
+        if (date == null) throw new ApiExceptions.BadRequest("date는 필수입니다.");
 
         List<TodoPriority> rows = todoPriorityRepository
                 .findAllByTodoUserIdAndPriorityDateOrderByPriorityOrderAsc(userId, date);
@@ -217,6 +220,42 @@ public class TodoPriorityService {
             }
 
             row.updateOrder(patch.getPriorityOrder());
+        }
+    }
+
+    private TodoDto.DailyPriorityResponse fallbackSaveAndReturn(List<Todo> todos, LocalDate date) {
+        List<TodoDto.PriorityItem> fallback = new ArrayList<>();
+        int i = 0;
+        for (Todo t : todos) {
+            todoPriorityRepository.save(
+                    TodoPriority.builder()
+                            .todo(t)
+                            .priorityDate(date)
+                            .priorityQuadrant(PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT)
+                            .priorityOrder(i)
+                            .build()
+            );
+            fallback.add(TodoDto.PriorityItem.builder()
+                    .todoId(t.getId())
+                    .content(t.getContent())
+                    .quadrant(PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT)
+                    .quadrantLabel(PriorityQuadrant.NOT_URGENT_NOT_IMPORTANT.label())
+                    .priorityOrder(i)
+                    .build());
+            i++;
+        }
+        return TodoDto.DailyPriorityResponse.builder().date(date).items(fallback).build();
+    }
+
+    private static class AiPriority {
+        private final Todo todo;
+        private final PriorityQuadrant quadrant;
+        private final int orderHint;
+
+        private AiPriority(Todo todo, PriorityQuadrant quadrant, int orderHint) {
+            this.todo = todo;
+            this.quadrant = quadrant;
+            this.orderHint = orderHint;
         }
     }
 }

@@ -4,6 +4,7 @@ import com.example.volrabbit_be.global.util.SecurityUtil;
 import com.example.volrabbit_be.todo.dto.TodoDto;
 import com.example.volrabbit_be.todo.service.TodoTimeLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,7 +39,9 @@ public class TodoTimeLogController {
     // 날짜별 누적 시간 조회
     @GetMapping("/time-logs/daily")
     public ResponseEntity<TodoDto.DailyTimeSummaryResponse> daily(
-            @RequestParam LocalDate date
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate date
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
         return ResponseEntity.ok(todoTimeLogService.dailySummary(userId, date));

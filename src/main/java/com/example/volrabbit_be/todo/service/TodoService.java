@@ -19,7 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +34,10 @@ public class TodoService {
     private final TodoOutcomeRepository todoOutcomeRepository;
     private final TodoVerificationRepository todoVerificationRepository;
     private final TodoSegmentationService todoSegmentationService;
+
+    private static final int DAILY_DAYS_AHEAD = 30;     // 기준일부터 30일치 추가
+    private static final int WEEKLY_WEEKS_AHEAD = 12;   // 12주치 추가
+    private static final int MONTHLY_MONTHS_AHEAD = 12; // 12개월치 추가
 
     @Transactional
     public TodoDto.CreateResponse create(Long userId, TodoDto.CreateRequest request) {
@@ -55,25 +61,35 @@ public class TodoService {
         }
 
         LocalDate dueDate = resolveDueDate(request.getDueType(), request.getDueDate());
+        validateDueDateNotPast(dueDate);
 
-        Todo todo = Todo.builder()
-                .user(user)
-                .category(category)
-                .content(request.getContent())
-                .dueType(request.getDueType())
-                .dueDate(dueDate)
-                .repeatType(request.getRepeatType())
-                .segmentationType(request.getSegmentationType())
-                .verificationType(request.getVerificationType())
-                .build();
+        // 반복이면 여러 개 생성 + repeatGroupId 묶기
+        String repeatGroupId = (request.getRepeatType() == RepeatType.NONE)
+                ? null
+                : UUID.randomUUID().toString();
 
-        Todo saved = todoRepository.save(todo);
+        List<Todo> toSave = buildTodosForRepeat(user, category, request, dueDate, repeatGroupId);
+        List<Todo> savedList = todoRepository.saveAll(toSave);
+
+        // 가장 빠른 dueDate의 투두 1개를 대표로 응답/AI 호출
+        Todo first = savedList.stream()
+                .min((a, b) -> {
+                    int c = a.getDueDate().compareTo(b.getDueDate());
+                    if (c != 0) return c;
+                    return Long.compare(
+                            a.getId() == null ? Long.MAX_VALUE : a.getId(),
+                            b.getId() == null ? Long.MAX_VALUE : b.getId()
+                    );
+                })
+                .orElseThrow(() -> new ApiExceptions.BadRequest("투두 생성에 실패했습니다."));
 
         // 세분화 필요 시 호출
-        todoSegmentationService.generateStepsIfNeeded(userId, saved.getId(), request.getSegmentationType());
+        todoSegmentationService.generateStepsIfNeeded(userId, first.getId(), request.getSegmentationType());
 
         return TodoDto.CreateResponse.builder()
-                .todoId(saved.getId())
+                .todoId(first.getId())
+                .repeatGroupId(repeatGroupId)
+                .createdCount(savedList.size())
                 .build();
     }
 
@@ -101,7 +117,7 @@ public class TodoService {
     }
 
     @Transactional
-    public TodoDto.UpdateResponse update(Long userId, Long todoId, TodoDto.UpdateRequest request) {
+    public TodoDto.DetailResponse update(Long userId, Long todoId, TodoDto.UpdateRequest request) {
         if (request == null) {
             throw new ApiExceptions.BadRequest("요청 바디가 필요합니다.");
         }
@@ -145,7 +161,12 @@ public class TodoService {
             } else {
                 newDueDate = resolveDueDate(newDueType, null);
             }
+
+            validateDueDateNotPast(newDueDate);
         }
+
+        // 4) repeatType 변경 시 repeatGroupId 처리
+        String newRepeatGroupId = resolveRepeatGroupIdForUpdate(todo, request.getRepeatType());
 
         // 5) patch 적용
         todo.patchUpdate(
@@ -154,13 +175,12 @@ public class TodoService {
                 newDueDate,
                 newDueType,
                 request.getRepeatType(),
+                newRepeatGroupId,
                 request.getSegmentationType(),
                 request.getVerificationType()
         );
 
-        return TodoDto.UpdateResponse.builder()
-                .todoId(todo.getId())
-                .build();
+        return toDetail(todo);
     }
 
     @Transactional
@@ -230,10 +250,8 @@ public class TodoService {
 
         Todo original = findTodo(todoId, userId);
 
-        // 1) 포기 상태로 변경
         original.giveUp();
 
-        // 2) 포기 사유 저장
         TodoOutcome outcome = TodoOutcome.builder()
                 .todo(original)
                 .outcomeStatus(OutcomeStatus.GIVE_UP)
@@ -242,7 +260,6 @@ public class TodoService {
                 .build();
         todoOutcomeRepository.save(outcome);
 
-        // 3) 새 투두 생성
         DueType newDueType = request.getDueType();
         if (newDueType != DueType.TOMORROW && newDueType != DueType.CUSTOM) {
             throw new ApiExceptions.BadRequest("재도전 dueType은 TOMORROW 또는 CUSTOM만 가능합니다.");
@@ -262,10 +279,6 @@ public class TodoService {
                 .build();
     }
 
-    /**
-     * 재도전: previousStatus 없이 original 상태 기반으로 처리
-     * - 원본이 FAIL/GIVE_UP일 때만 가능
-     */
     @Transactional
     public TodoDto.RetryResponse retry(Long userId, Long todoId, TodoDto.RetryRequest request) {
         if (request == null) {
@@ -460,6 +473,85 @@ public class TodoService {
         return requestDueDate;
     }
 
+    private void validateDueDateNotPast(LocalDate dueDate) {
+        LocalDate today = LocalDate.now();
+        if (dueDate.isBefore(today)) {
+            throw new ApiExceptions.BadRequest("dueDate는 과거 날짜일 수 없습니다.");
+        }
+    }
+
+    /**
+     * repeatType 변경 요청이 들어오면 repeatGroupId도 같이 정리
+     * - null(변경없음) -> 기존 유지(null 반환해서 patchUpdate에서 건드리지 않게)
+     * - NONE -> null로 끊기
+     * - DAILY/WEEKLY/MONTHLY -> 기존 group이 있으면 유지, 없으면 새 UUID 발급
+     */
+    private String resolveRepeatGroupIdForUpdate(Todo todo, RepeatType newRepeatType) {
+        if (newRepeatType == null) return null;
+
+        if (newRepeatType == RepeatType.NONE) {
+            return null;
+        }
+
+        // 반복으로 바꾸는 경우
+        if (todo.getRepeatGroupId() != null) return todo.getRepeatGroupId();
+        return UUID.randomUUID().toString();
+    }
+
+    /**
+     * repeatType에 따라 "기준 dueDate부터 미래 일정"을 미리 생성해서 반환
+     * - NONE: 1개
+     * - DAILY: 기준일부터 30일치 추가
+     * - WEEKLY: 기준일부터 12주치 추가
+     * - MONTHLY: 기준일부터 12개월치 추가
+     */
+    private List<Todo> buildTodosForRepeat(
+            User user,
+            Category category,
+            TodoDto.CreateRequest request,
+            LocalDate baseDueDate,
+            String repeatGroupId
+    ) {
+        List<LocalDate> dates = buildRepeatDates(baseDueDate, request.getRepeatType());
+
+        List<Todo> list = new ArrayList<>(dates.size());
+        for (LocalDate date : dates) {
+            Todo todo = Todo.builder()
+                    .user(user)
+                    .category(category)
+                    .content(request.getContent())
+                    .dueType(request.getDueType())
+                    .dueDate(date)
+                    .repeatType(request.getRepeatType())
+                    .repeatGroupId(repeatGroupId)
+                    .segmentationType(request.getSegmentationType())
+                    .verificationType(request.getVerificationType())
+                    .build();
+            list.add(todo);
+        }
+        return list;
+    }
+
+    private List<LocalDate> buildRepeatDates(LocalDate base, RepeatType repeatType) {
+        List<LocalDate> dates = new ArrayList<>();
+        dates.add(base); // 기준일은 항상 생성
+
+        switch (repeatType) {
+            case NONE -> {
+            }
+            case DAILY -> {
+                for (int i = 1; i <= DAILY_DAYS_AHEAD; i++) dates.add(base.plusDays(i));
+            }
+            case WEEKLY -> {
+                for (int i = 1; i <= WEEKLY_WEEKS_AHEAD; i++) dates.add(base.plusWeeks(i));
+            }
+            case MONTHLY -> {
+                for (int i = 1; i <= MONTHLY_MONTHS_AHEAD; i++) dates.add(base.plusMonths(i));
+            }
+        }
+        return dates;
+    }
+
     private Todo findTodo(Long todoId, Long userId) {
         return todoRepository.findByIdAndUserId(todoId, userId)
                 .orElseThrow(() -> new ApiExceptions.NotFound("투두가 존재하지 않습니다."));
@@ -494,6 +586,7 @@ public class TodoService {
                 .dueDate(todo.getDueDate())
                 .dueType(todo.getDueType())
                 .repeatType(todo.getRepeatType())
+                .repeatGroupId(todo.getRepeatGroupId())
                 .segmentationType(todo.getSegmentationType())
                 .verificationType(todo.getVerificationType())
                 .todoStatus(todo.getTodoStatus())
@@ -509,6 +602,7 @@ public class TodoService {
                 .dueDate(todo.getDueDate())
                 .dueType(todo.getDueType())
                 .repeatType(todo.getRepeatType())
+                .repeatGroupId(todo.getRepeatGroupId())
                 .segmentationType(todo.getSegmentationType())
                 .verificationType(todo.getVerificationType())
                 .todoStatus(todo.getTodoStatus())
