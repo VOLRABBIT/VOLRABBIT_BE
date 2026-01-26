@@ -2,6 +2,7 @@ package com.example.volrabbit_be.global.jwt;
 
 import com.example.volrabbit_be.global.util.RsaKeyLoader;
 import io.jsonwebtoken.*;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
