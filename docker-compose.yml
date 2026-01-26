@@ -11,23 +11,26 @@ services:
     env_file:
       - .env
     environment:
+      # .env 파일에서 읽어오지만, 호스트는 명시적으로 지정
       DB_HOST: db
-      DB_PORT: 3306
+      TZ: Asia/Seoul
     depends_on:
       - db
     restart: unless-stopped
-
+    
+    # 리소스 제한 (프리티어 서버 보호)
     deploy:
       resources:
         limits:
           memory: 512M
-
+    
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
+  # 2. MySQL 데이터베이스
   db:
     image: mysql:8.0
     container_name: volrabbit-db
@@ -44,7 +47,8 @@ services:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
-
+    
+    # 메모리 최적화 옵션
     command: >
       --default-authentication-plugin=mysql_native_password
       --innodb-buffer-pool-size=64M
