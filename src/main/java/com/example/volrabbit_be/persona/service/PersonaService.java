@@ -3,13 +3,13 @@ package com.example.volrabbit_be.persona.service;
 import com.example.volrabbit_be.persona.domain.Persona;
 import com.example.volrabbit_be.persona.dto.PersonaDto;
 import com.example.volrabbit_be.persona.repository.PersonaRepository;
-import tools.jackson.databind.DatabindException;
+import com.fasterxml.jackson.databind.DatabindException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
