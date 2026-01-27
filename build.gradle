@@ -30,32 +30,38 @@ ext {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	compileOnly 'org.projectlombok:lombok'
-	developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	runtimeOnly 'com.mysql:mysql-connector-j'
-	annotationProcessor 'org.projectlombok:lombok'
-	testImplementation 'org.springframework.boot:spring-boot-restdocs'
-	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-web-test'
-	testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // 1. Spring Boot 기본 스타터 (JPA, Security, OAuth2, Web, Validation)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // 2. 유틸리티 (Lombok, Dotenv)
+    compileOnly 'org.projectlombok:lombok'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    annotationProcessor 'org.projectlombok:lombok'
     implementation 'io.github.cdimascio:java-dotenv:5.2.2'
-    // Swagger gradle 추가
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
-    //토큰 관련 gradle 추가
+
+    // 3. 데이터베이스 드라이버
+    runtimeOnly 'com.mysql:mysql-connector-j'
+    runtimeOnly 'com.h2database:h2'
+
+    // 4. Swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.3'
+
+    // 5. JWT
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
-    //테스트용 H2 DB 추가
-    runtimeOnly 'com.h2database:h2'
 
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // 7. 테스트 라이브러리 (이름 오류 수정 완료) ✅
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
@@ -68,6 +74,7 @@ tasks.named('asciidoctor') {
 	dependsOn test
 }
 
+// Swagger 파라미터 인식용
 tasks.withType(JavaCompile) {
     options.compilerArgs.add("-parameters")
 }
