@@ -63,7 +63,7 @@ public class PersonaService {
      */
     public PersonaDto.PersonaAnalysisResponse getPersonaAnalysisByPersonaId(long personaId) {
         try (FileReader fr =
-                     new FileReader(personaAnalysisJsonPath.getFilePath().resolve(personaId + ".json").toFile())) {
+                     new FileReader(personaAnalysisJsonPath.getFile().toPath().resolve(personaId + ".json").toFile())) {
             PersonaDto.PersonaAnalysisResponse analysisResponse =
                     objectMapper.readValue(fr, PersonaDto.PersonaAnalysisResponse.class);
 
