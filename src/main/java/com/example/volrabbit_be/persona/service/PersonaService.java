@@ -1,5 +1,6 @@
 package com.example.volrabbit_be.persona.service;
 
+import com.example.volrabbit_be.global.exception.ApiExceptions;
 import com.example.volrabbit_be.persona.domain.Persona;
 import com.example.volrabbit_be.persona.dto.PersonaDto;
 import com.example.volrabbit_be.persona.repository.PersonaRepository;
@@ -56,7 +57,7 @@ public class PersonaService {
     public PersonaDto.PersonaResponse getPersonaByPersonaId(long personaId) {
         Optional<Persona> optionalPersona = personaRepository.findById(personaId);
 
-        Persona persona = optionalPersona.orElseThrow(() -> new IllegalArgumentException("해당 ID를 가진 페르소나가 없습니다."));
+        Persona persona = optionalPersona.orElseThrow(() -> new ApiExceptions.NotFound("해당 ID를 가진 페르소나가 없습니다."));
 
         return PersonaDto.PersonaResponse.of(persona.getId(), persona.getName(), persona.getIconUrl());
     }
@@ -75,12 +76,12 @@ public class PersonaService {
             return analysisResponse;
         } catch (NoSuchKeyException e) {
             // localFallback을 false로 호출했을 때를 대비
-            throw new IllegalArgumentException("해당 ID의 페르소나 분석 파일을 찾지 못했습니다. (S3)");
+            throw new ApiExceptions.NotFound("해당 ID의 페르소나 분석 파일을 찾지 못했습니다. (S3)");
         } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("해당 ID의 페르소나 분석 파일을 찾지 못했습니다. (로컬)");
+            throw new ApiExceptions.NotFound("해당 ID의 페르소나 분석 파일을 찾지 못했습니다. (로컬)");
         } catch (DatabindException e) {
             // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
-            throw new IllegalArgumentException("해당 ID의 페르소나 분석 파일이 잘못되었습니다.");
+            throw new RuntimeException("해당 ID의 페르소나 분석 파일이 잘못되었습니다.");
         } catch (IOException e) {
             // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
             throw new RuntimeException(e.getMessage());
