@@ -12,8 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,10 +62,10 @@ public class PersonaService {
      * @return 단일 페르소나 분석 응답 객체
      */
     public PersonaDto.PersonaAnalysisResponse getPersonaAnalysisByPersonaId(long personaId) {
-        try (FileReader fr =
-                     new FileReader(personaAnalysisJsonPath.getFilePath().resolve(personaId + ".json").toFile())) {
+        try (InputStream is =
+                     personaAnalysisJsonPath.createRelative(personaId + ".json").getInputStream()) {
             PersonaDto.PersonaAnalysisResponse analysisResponse =
-                    objectMapper.readValue(fr, PersonaDto.PersonaAnalysisResponse.class);
+                    objectMapper.readValue(is, PersonaDto.PersonaAnalysisResponse.class);
 
             return analysisResponse;
         } catch (FileNotFoundException e) {
