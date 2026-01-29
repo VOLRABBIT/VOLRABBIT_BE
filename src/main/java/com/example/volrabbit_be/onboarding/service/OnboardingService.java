@@ -8,12 +8,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
@@ -23,8 +23,14 @@ import java.util.*;
 @Transactional(readOnly = true)
 public class OnboardingService {
 
-    @Value("${volrabbit.onboarding.question.filename:classpath:onboarding/questions.json}")
-    private Resource questionJsonPath;
+    // 온보딩 질문 파일(JSON)이 저장되어 있는 S3 경로 (우선 사용)
+    @Value("${volrabbit.onboarding.question.s3filename:#null}")
+    private Resource questionJsonS3Path;
+
+    // 온보딩 질문 파일(JSON)이 저장되어 있는 로컬 경로 (로컬 테스트, S3 오류 대비)
+    @Value("${volrabbit.onboarding.question.localfilename:classpath:onboarding/questions.json}")
+    private Resource questionJsonLocalPath;
+
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository; // 페르소나 지정할 때 필요
 
@@ -33,16 +39,23 @@ public class OnboardingService {
      * @return 온보딩 질문 응답 객체로 구성된 리스트
      */
     public List<OnboardingDto.OnboardingQuestionResponse> getAllQuestions() {
-        try (InputStream is = questionJsonPath.getInputStream()) {
+        // 만약, S3 장애, 설정 오류 등으로 S3 객체를 사용하지 못할 때, 로컬 파일을 사용할 수 있도록 함
+        try (InputStream is = getAllQuestionsInputStream(true)) {
             List<OnboardingDto.OnboardingQuestionResponse> onboardingQuestions =
-                    objectMapper.readValue(is, new TypeReference<List<OnboardingDto.OnboardingQuestionResponse>>() {});
+                    objectMapper.readValue(is, new TypeReference<List<OnboardingDto.OnboardingQuestionResponse>>() {
+                    });
 
             return onboardingQuestions;
+        } catch (NoSuchKeyException e) {
+            // localFallback을 false로 호출했을 때를 대비
+            throw new IllegalArgumentException("온보딩 질문 파일이 존재하지 않습니다. (S3)");
         } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("온보딩 질문 파일이 존재하지 않습니다.");
+            throw new IllegalArgumentException("온보딩 질문 파일이 존재하지 않습니다. (로컬)");
         } catch (DatabindException e) {
+            // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
             throw new IllegalArgumentException("온보딩 질문 파일이 잘못되었습니다.");
         } catch (IOException e) {
+            // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
             throw new RuntimeException(e.getMessage());
         }
     }
@@ -60,6 +73,22 @@ public class OnboardingService {
         assignPersonaToUser(userId, personaId);
 
         return OnboardingDto.OnboardingResultResponse.of(userId, personaId);
+    }
+
+    private InputStream getAllQuestionsInputStream(boolean localFallback) throws IOException {
+        try {
+            return getAllQuestionsInputStreamFromResource(questionJsonS3Path);
+        } catch (Exception e) {
+            if (!localFallback) {
+                throw e;
+            }
+
+            return getAllQuestionsInputStreamFromResource(questionJsonLocalPath);
+        }
+    }
+
+    private InputStream getAllQuestionsInputStreamFromResource(Resource resource) throws IOException {
+        return resource.getInputStream();
     }
 
     private long processResponses(List<OnboardingDto.OnboardingSubmitRequest> onboardingSubmits) {
