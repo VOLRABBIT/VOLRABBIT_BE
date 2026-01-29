@@ -15,6 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
 
 @Service
@@ -32,9 +33,9 @@ public class OnboardingService {
      * @return 온보딩 질문 응답 객체로 구성된 리스트
      */
     public List<OnboardingDto.OnboardingQuestionResponse> getAllQuestions() {
-        try (FileReader fr = new FileReader(questionJsonPath.getFile())) {
+        try (InputStream is = questionJsonPath.getInputStream()) {
             List<OnboardingDto.OnboardingQuestionResponse> onboardingQuestions =
-                    objectMapper.readValue(fr, new TypeReference<List<OnboardingDto.OnboardingQuestionResponse>>() {});
+                    objectMapper.readValue(is, new TypeReference<List<OnboardingDto.OnboardingQuestionResponse>>() {});
 
             return onboardingQuestions;
         } catch (FileNotFoundException e) {
