@@ -1,5 +1,6 @@
 package com.example.volrabbit_be.onboarding.service;
 
+import com.example.volrabbit_be.global.exception.ApiExceptions;
 import com.example.volrabbit_be.onboarding.dto.OnboardingDto;
 import com.example.volrabbit_be.user.domain.User;
 import com.example.volrabbit_be.user.repository.UserRepository;
@@ -48,12 +49,12 @@ public class OnboardingService {
             return onboardingQuestions;
         } catch (NoSuchKeyException e) {
             // localFallback을 false로 호출했을 때를 대비
-            throw new IllegalArgumentException("온보딩 질문 파일이 존재하지 않습니다. (S3)");
+            throw new ApiExceptions.NotFound("온보딩 질문 파일이 존재하지 않습니다. (S3)");
         } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("온보딩 질문 파일이 존재하지 않습니다. (로컬)");
+            throw new ApiExceptions.NotFound("온보딩 질문 파일이 존재하지 않습니다. (로컬)");
         } catch (DatabindException e) {
             // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
-            throw new IllegalArgumentException("온보딩 질문 파일이 잘못되었습니다.");
+            throw new RuntimeException("온보딩 질문 파일이 잘못되었습니다.");
         } catch (IOException e) {
             // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
             throw new RuntimeException(e.getMessage());
@@ -106,7 +107,7 @@ public class OnboardingService {
 
         // 불완전한 응답 (온보딩 질문 개수 7개)
         if (onboardingSubmits.size() != 7) {
-            throw new IllegalArgumentException("온보딩 제출 정보가 잘못되었습니다.");
+            throw new ApiExceptions.BadRequest("온보딩 제출 정보가 잘못되었습니다.");
         }
 
         // 혹시 몰라서 정렬 (최악의 경우 O(n log n))
@@ -149,10 +150,10 @@ public class OnboardingService {
     private void assignPersonaToUser(long userId, long personaId) {
         Optional<User> optionalUser = userRepository.findById(userId);
 
-        User user = optionalUser.orElseThrow(() -> new IllegalArgumentException("유저 ID에 해당하는 유저가 존재하지 않습니다."));
+        User user = optionalUser.orElseThrow(() -> new ApiExceptions.BadRequest("유저 ID에 해당하는 유저가 존재하지 않습니다."));
 
         // 이미 해당 유저의 페르소나가 지정되어 있는지 확인(온보딩에서만)
-        if (user.getPersonaId() != null) throw new IllegalArgumentException("이미 해당 유저의 페르소나가 지정되어 있습니다.");
+        if (user.getPersonaId() != null) throw new ApiExceptions.BadRequest("이미 해당 유저의 페르소나가 지정되어 있습니다.");
 
         user.selectPersona(personaId);
         userRepository.save(user);
