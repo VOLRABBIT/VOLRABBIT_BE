@@ -3,6 +3,7 @@ package com.example.volrabbit_be.persona.service;
 import com.example.volrabbit_be.persona.domain.Persona;
 import com.example.volrabbit_be.persona.dto.PersonaDto;
 import com.example.volrabbit_be.persona.repository.PersonaRepository;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import tools.jackson.databind.DatabindException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,11 +73,16 @@ public class PersonaService {
                     objectMapper.readValue(is, PersonaDto.PersonaAnalysisResponse.class);
 
             return analysisResponse;
+        } catch (NoSuchKeyException e) {
+            // localFallback을 false로 호출했을 때를 대비
+            throw new IllegalArgumentException("해당 ID의 페르소나 분석 파일을 찾지 못했습니다. (S3)");
         } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("해당 ID의 페르소나 분석 파일을 찾지 못했습니다.");
+            throw new IllegalArgumentException("해당 ID의 페르소나 분석 파일을 찾지 못했습니다. (로컬)");
         } catch (DatabindException e) {
+            // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
             throw new IllegalArgumentException("해당 ID의 페르소나 분석 파일이 잘못되었습니다.");
         } catch (IOException e) {
+            // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
             throw new RuntimeException(e.getMessage());
         }
     }
