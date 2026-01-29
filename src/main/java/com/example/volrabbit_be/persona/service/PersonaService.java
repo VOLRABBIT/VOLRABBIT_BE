@@ -25,9 +25,13 @@ public class PersonaService {
     private final PersonaRepository personaRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // 페르소나 분석 파일(JSON)이 저장되어 있는 경로
-    @Value("${volrabbit.persona.analysis.path:classpath:persona/analyses/}")
-    Resource personaAnalysisJsonPath;
+    // 페르소나 분석 파일(JSON)이 저장되어 있는 S3 경로 (우선 사용)
+    @Value("${volrabbit.persona.analysis.s3path:#null}")
+    private Resource personaAnalysisJsonS3Path;
+
+    // 페르소나 분석 파일(JSON)이 저장되어 있는 로컬 경로 (로컬 테스트, S3 오류 대비)
+    @Value("${volrabbit.persona.analysis.localpath:classpath:persona/analyses/}")
+    private Resource personaAnalysisJsonLocalPath;
 
     /**
      * 모든 페르소나를 가져옴
@@ -62,8 +66,8 @@ public class PersonaService {
      * @return 단일 페르소나 분석 응답 객체
      */
     public PersonaDto.PersonaAnalysisResponse getPersonaAnalysisByPersonaId(long personaId) {
-        try (InputStream is =
-                     personaAnalysisJsonPath.createRelative(personaId + ".json").getInputStream()) {
+        // 만약, S3 장애, 설정 오류 등으로 S3 객체를 사용하지 못할 때, 로컬 파일을 사용할 수 있도록 함
+        try (InputStream is = getPersonaAnalysisInputStreamFromPersonaId(personaId, true)) {
             PersonaDto.PersonaAnalysisResponse analysisResponse =
                     objectMapper.readValue(is, PersonaDto.PersonaAnalysisResponse.class);
 
@@ -75,5 +79,21 @@ public class PersonaService {
         } catch (IOException e) {
             throw new RuntimeException(e.getMessage());
         }
+    }
+
+    private InputStream getPersonaAnalysisInputStreamFromPersonaId(long personaId, boolean localFallback) throws IOException {
+        try {
+            return getPersonaAnalysisInputStreamFromResource(personaId, personaAnalysisJsonS3Path);
+        } catch (Exception e) {
+            if (!localFallback) {
+                throw e;
+            }
+
+            return getPersonaAnalysisInputStreamFromResource(personaId, personaAnalysisJsonLocalPath);
+        }
+    }
+
+    private InputStream getPersonaAnalysisInputStreamFromResource(long personaId, Resource resource) throws IOException {
+        return resource.createRelative(personaId + ".json").getInputStream();
     }
 }
