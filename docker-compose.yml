@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # 1. Spring Boot 백엔드
   app:
     container_name: volrabbit-backend
     image: volrabbit-backend:latest
@@ -11,51 +10,9 @@ services:
     env_file:
       - .env
     environment:
-      # .env 파일에서 읽어오지만, 호스트는 명시적으로 지정
-      DB_HOST: db
+      DB_HOST: ${DB_HOST}
       TZ: Asia/Seoul
-    depends_on:
-      - db
     restart: unless-stopped
-    
-    # 리소스 제한 (프리티어 서버 보호)
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # 2. MySQL 데이터베이스
-  db:
-    image: mysql:8.0
-    container_name: volrabbit-db
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      TZ: Asia/Seoul
-    ports:
-      - "3306:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-    
-    # 메모리 최적화 옵션
-    command: >
-      --default-authentication-plugin=mysql_native_password
-      --innodb-buffer-pool-size=64M
-      --performance-schema=OFF
-      --max-connections=50
-      --table-open-cache=100
-      --key_buffer_size=8M
 
     deploy:
       resources:
@@ -67,6 +24,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  db_data:
