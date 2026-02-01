@@ -37,9 +37,9 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew clean build -x test
 
-      # 6. 배포 파일 압축
+      # 6. 배포 파일 압축 (nginx 설정 포함)
       - name: Make tar file
-        run: tar -cvf deploy.tar docker-compose.yml Dockerfile build/libs/*.jar
+        run: tar -cvf deploy.tar docker-compose.yml Dockerfile build/libs/*.jar nginx/default.conf
 
       # 7. 서버로 파일 전송 (SCP)
       - name: Copy files to server
@@ -55,6 +55,8 @@ jobs:
       - name: Deploy on server
         uses: appleboy/ssh-action@master
         env:
+          # DB & RDS
+          DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
@@ -71,7 +73,7 @@ jobs:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           NAVER_REDIRECT_URI: ${{ secrets.NAVER_REDIRECT_URI }}
-          
+
           # AWS Secrets
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -81,33 +83,25 @@ jobs:
           # Asset Secrets
           VOLRABBIT_PERSONA_ANALYSIS_PATH: ${{ secrets.VOLRABBIT_PERSONA_ANALYSIS_PATH }}
           VOLRABBIT_ONBOARDING_QUESTION_FILENAME: ${{ secrets.VOLRABBIT_ONBOARDING_QUESTION_FILENAME }}
-        
+
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
-          # envs에 나열된 변수들을 script로 넘김
-          envs: DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,PRIVATE_PEM,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,NAVER_CLIENT_ID,NAVER_CLIENT_SECRET,NAVER_REDIRECT_URI,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET_NAME,AWS_REGION,VOLRABBIT_PERSONA_ANALYSIS_PATH,VOLRABBIT_ONBOARDING_QUESTION_FILENAME
+          envs: DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,PRIVATE_PEM,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,NAVER_CLIENT_ID,NAVER_CLIENT_SECRET,NAVER_REDIRECT_URI,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET_NAME,AWS_REGION,VOLRABBIT_PERSONA_ANALYSIS_PATH,VOLRABBIT_ONBOARDING_QUESTION_FILENAME
           script: |
             mkdir -p /home/${{ secrets.USERNAME }}/app
             cd /home/${{ secrets.USERNAME }}/app
-
-            # 1. 압축 풀기
             tar -xvf deploy.tar
 
-            # 2. .env 파일 생성 (도커 컨테이너가 읽을 파일)
+            # .env 파일 생성 (DB_HOST에 RDS 주소 정확히 주입)
             cat > .env << EOF
-            # DB 설정 (Docker 내부 통신이므로 host는 db)
-            DB_HOST=db
+            DB_HOST=$DB_HOST
             DB_PORT=$DB_PORT
             DB_NAME=$DB_NAME
             DB_USERNAME=$DB_USERNAME
             DB_PASSWORD=$DB_PASSWORD
-            
-            # JWT 설정
             JWT_SECRET_KEY="$PRIVATE_PEM"
-            
-            # OAuth2 설정
             KAKAO_CLIENT_ID=$KAKAO_CLIENT_ID
             KAKAO_CLIENT_SECRET=$KAKAO_CLIENT_SECRET
             KAKAO_REDIRECT_URI=$KAKAO_REDIRECT_URI
@@ -117,24 +111,33 @@ jobs:
             NAVER_CLIENT_ID=$NAVER_CLIENT_ID
             NAVER_CLIENT_SECRET=$NAVER_CLIENT_SECRET
             NAVER_REDIRECT_URI=$NAVER_REDIRECT_URI
-            
-            # AWS 설정
             AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
             AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
             AWS_S3_BUCKET_NAME=$AWS_S3_BUCKET_NAME
             AWS_REGION=$AWS_REGION
-            
-            # Assets
             VOLRABBIT_PERSONA_ANALYSIS_PATH=$VOLRABBIT_PERSONA_ANALYSIS_PATH
             VOLRABBIT_ONBOARDING_QUESTION_FILENAME=$VOLRABBIT_ONBOARDING_QUESTION_FILENAME
             EOF
             
             chmod 600 .env
 
-            # 3. 도커 재실행
+            # NGINX 설정 (Host 방식)
+            echo "Configuring NGINX on Host..."
+            sudo cp nginx/default.conf /etc/nginx/sites-available/default
+            sudo ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+            
+            if sudo nginx -t; then
+              sudo systemctl reload nginx
+              echo "✅ NGINX Reloaded Successfully"
+            else
+              echo "❌ NGINX Config Error! Check /etc/nginx/sites-available/default"
+              exit 1
+            fi
+
+            # 기존 컨테이너 정리 및 새 배포
             docker compose down
             docker compose up -d --build
 
-            # 4. 청소
+            # 정리 작업
             rm deploy.tar
             docker image prune -f
