@@ -269,4 +269,27 @@ public class TodoDto {
             private Integer priorityOrder;
         }
     }
+
+    /**
+     * NFC 태그 등록 응답
+     * - tagCode: 태그 URL에 들어갈 식별자(UUID)
+     * - ndefUrl: NFC 태그에 NDEF로 기록할 URL
+     */
+    @Getter
+    @Builder
+    public static class NfcRegisterResponse {
+        private Long todoId;
+        private String tagCode;
+        private String ndefUrl;
+    }
+
+    /**
+     * NFC 인증 요청(앱이 태그 스캔 후 tagCode로 서버에 인증 요청)
+     */
+
+    @Getter
+    @NoArgsConstructor
+    public static class NfcVerifyRequest {
+        private String tagCode;
+    }
 }

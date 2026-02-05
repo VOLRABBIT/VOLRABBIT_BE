@@ -11,6 +11,7 @@ import com.example.volrabbit_be.todo.repository.CategoryRepository;
 import com.example.volrabbit_be.todo.repository.TodoOutcomeRepository;
 import com.example.volrabbit_be.todo.repository.TodoRepository;
 import com.example.volrabbit_be.todo.repository.TodoVerificationRepository;
+import com.example.volrabbit_be.todo.domain.enumType.todoStatus;
 import com.example.volrabbit_be.user.domain.User;
 import com.example.volrabbit_be.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -391,26 +392,6 @@ public class TodoService {
         return toVerificationResponse(todo, saved.getCreatedDate());
     }
 
-    @Transactional
-    public TodoDto.VerificationResponse verifyTag(Long userId, Long todoId, TodoDto.TagRequest request) {
-        if (request == null || request.getTagText() == null || request.getTagText().isBlank()) {
-            throw new ApiExceptions.BadRequest("제대로 된 NFC 값이 입력되지 않았습니다.");
-        }
-
-        Todo todo = findTodo(todoId, userId);
-        validateVerifiable(todo, VerificationType.TAG);
-
-        TodoVerification verification = TodoVerification.builder()
-                .todo(todo)
-                .build();
-        verification.verifyByTag(request.getTagText());
-
-        TodoVerification saved = todoVerificationRepository.save(verification);
-        todo.complete();
-
-        return toVerificationResponse(todo, saved.getCreatedDate());
-    }
-
     // ===== private helpers =====
 
     private void validateCreateOrUpdateRequest(
@@ -480,12 +461,6 @@ public class TodoService {
         }
     }
 
-    /**
-     * repeatType 변경 요청이 들어오면 repeatGroupId도 같이 정리
-     * - null(변경없음) -> 기존 유지(null 반환해서 patchUpdate에서 건드리지 않게)
-     * - NONE -> null로 끊기
-     * - DAILY/WEEKLY/MONTHLY -> 기존 group이 있으면 유지, 없으면 새 UUID 발급
-     */
     private String resolveRepeatGroupIdForUpdate(Todo todo, RepeatType newRepeatType) {
         if (newRepeatType == null) return null;
 
@@ -493,18 +468,10 @@ public class TodoService {
             return null;
         }
 
-        // 반복으로 바꾸는 경우
         if (todo.getRepeatGroupId() != null) return todo.getRepeatGroupId();
         return UUID.randomUUID().toString();
     }
 
-    /**
-     * repeatType에 따라 "기준 dueDate부터 미래 일정"을 미리 생성해서 반환
-     * - NONE: 1개
-     * - DAILY: 기준일부터 30일치 추가
-     * - WEEKLY: 기준일부터 12주치 추가
-     * - MONTHLY: 기준일부터 12개월치 추가
-     */
     private List<Todo> buildTodosForRepeat(
             User user,
             Category category,
@@ -534,11 +501,10 @@ public class TodoService {
 
     private List<LocalDate> buildRepeatDates(LocalDate base, RepeatType repeatType) {
         List<LocalDate> dates = new ArrayList<>();
-        dates.add(base); // 기준일은 항상 생성
+        dates.add(base);
 
         switch (repeatType) {
-            case NONE -> {
-            }
+            case NONE -> { }
             case DAILY -> {
                 for (int i = 1; i <= DAILY_DAYS_AHEAD; i++) dates.add(base.plusDays(i));
             }

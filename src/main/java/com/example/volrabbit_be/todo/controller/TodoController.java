@@ -62,20 +62,25 @@ public class TodoController {
         Long userId = SecurityUtil.getCurrentUserId();
         return ResponseEntity.ok(todoService.update(userId, todoId, request));
     }
-    @Operation(summary = "상태 값 변화(complete)",
+
+    @Operation(
+            summary = "상태 값 변화(complete)",
             description = "(인증 API가 있어서 아마 사용되진 않을 것 같은데, 혹시 몰라서 구현해뒀습니다.)" +
                     "투두 생성시 선택했던 방식으로 인증이 완료됐다면 " +
-                    "해당 투두는 complete로 상태 값이 수정됩니다.")
+                    "해당 투두는 complete로 상태 값이 수정됩니다."
+    )
     @PatchMapping("/{todoId}/complete")
     public ResponseEntity<TodoDto.StatusResponse> complete(@PathVariable Long todoId) {
         Long userId = SecurityUtil.getCurrentUserId();
         return ResponseEntity.ok(todoService.complete(userId, todoId));
     }
 
-    @Operation(summary = "상태 값 변화(fail)",
+    @Operation(
+            summary = "상태 값 변화(fail)",
             description = "유저가 투두 포기 후 재도전하지 않고, " +
                     "실패 원인을 제출했을 때 " +
-                    "상태 값 fail 처리를 담당하는 API 입니다.")
+                    "상태 값 fail 처리를 담당하는 API 입니다."
+    )
     @PatchMapping("/{todoId}/fail")
     public ResponseEntity<TodoDto.StatusResponse> fail(
             @PathVariable Long todoId,
@@ -85,8 +90,10 @@ public class TodoController {
         return ResponseEntity.ok(todoService.fail(userId, todoId, request));
     }
 
-    @Operation(summary = "상태 값 변화(give_up)",
-            description = "유저가 포기 원인을 제출했을 때 상태 값 give_up 처리를 담당하는 API 입니다.")
+    @Operation(
+            summary = "상태 값 변화(give_up)",
+            description = "유저가 포기 원인을 제출했을 때 상태 값 give_up 처리를 담당하는 API 입니다."
+    )
     @PatchMapping("/{todoId}/give-up")
     public ResponseEntity<TodoDto.StatusResponse> giveUp(
             @PathVariable Long todoId,
@@ -107,10 +114,12 @@ public class TodoController {
     }
 
     // 포기 사유 입력 후 재도전
-    @Operation(summary = "재도전 투두 생성",
+    @Operation(
+            summary = "재도전 투두 생성",
             description = "기존 투두는 give_up 처리하고, " +
                     "동일한 내용의 inprogress 투두를 재생성합니다. " +
-                    "이때 기존 todoId는 새로운 투두의 retryFromTodoId 값에 들어갑니다.")
+                    "이때 기존 todoId는 새로운 투두의 retryFromTodoId 값에 들어갑니다."
+    )
     @PostMapping("/{todoId}/give-up/retry")
     public ResponseEntity<TodoDto.RetryResponse> giveUpAndRetry(
             @PathVariable Long todoId,
@@ -147,14 +156,4 @@ public class TodoController {
         return ResponseEntity.ok(todoService.verifyPhotoProof(userId, todoId, request));
     }
 
-    // NFC
-    @PostMapping("/{todoId}/tag")
-    @Operation(summary = "NFC 태깅 인증", description = "아직 논의된 바가 없어서 일단 url 업로드만 구현해뒀습니다.")
-    public ResponseEntity<TodoDto.VerificationResponse> verifyTag(
-            @PathVariable Long todoId,
-            @RequestBody TodoDto.TagRequest request
-    ) {
-        Long userId = SecurityUtil.getCurrentUserId();
-        return ResponseEntity.ok(todoService.verifyTag(userId, todoId, request));
-    }
 }
