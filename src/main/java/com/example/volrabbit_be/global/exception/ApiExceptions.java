@@ -26,4 +26,11 @@ public final class ApiExceptions {
     public static class Unauthorized extends RuntimeException {
         public Unauthorized(String message) { super(message); }
     }
+
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public static class Forbidden extends RuntimeException {
+        public Forbidden(String message) {
+            super(message);
+        }
+    }
 }

@@ -26,10 +26,7 @@ public class TodoVerification extends BaseTimeEntity {
     @Column
     private String photoUrl;
 
-    @Column
-    private String tagText;
-
-    @Column
+    @Column(nullable = false)
     private boolean checked;
 
     @Builder
@@ -49,9 +46,8 @@ public class TodoVerification extends BaseTimeEntity {
         this.checked = true;
     }
 
-    // 태그 인증 성공
-    public void verifyByTag(String tagText) {
-        this.tagText = tagText;
+    // NFC 인증 성공 (따로 저장할 값은 없고, 인증 여부만 boolean으로 체크)
+    public void verifyByNfc() {
         this.checked = true;
     }
 
