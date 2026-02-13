@@ -45,7 +45,7 @@ public class PersonaService {
         List<Persona> personas = personaRepository.findAll();
 
         List<PersonaDto.PersonaResponse> personasListResponse = personas.stream().map(persona -> {
-            return PersonaDto.PersonaResponse.of(persona.getId(), persona.getName(), persona.getIconUrl());
+            return PersonaDto.PersonaResponse.of(persona.getId(), persona.getName(), s3Service.getPresignedUrlFromS3ObjectUri(persona.getIconUrl()));
         }).toList();
 
         return personasListResponse;
@@ -61,7 +61,7 @@ public class PersonaService {
 
         Persona persona = optionalPersona.orElseThrow(() -> new ApiExceptions.NotFound("해당 ID를 가진 페르소나가 없습니다."));
 
-        return PersonaDto.PersonaResponse.of(persona.getId(), persona.getName(), persona.getIconUrl());
+        return PersonaDto.PersonaResponse.of(persona.getId(), persona.getName(), s3Service.getPresignedUrlFromS3ObjectUri(persona.getIconUrl()));
     }
 
     /**
@@ -74,6 +74,8 @@ public class PersonaService {
         try (InputStream is = getPersonaAnalysisInputStreamFromPersonaId(personaId, true)) {
             PersonaDto.PersonaAnalysisResponse analysisResponse =
                     objectMapper.readValue(is, PersonaDto.PersonaAnalysisResponse.class);
+
+            analysisResponse.replaceIconUrl(s3Service.getPresignedUrlFromS3ObjectUri(analysisResponse.getIconUrl()));
 
             return analysisResponse;
         } catch (NullPointerException | NoSuchElementException | FileNotFoundException e) {
