@@ -1,22 +1,23 @@
 package com.example.volrabbit_be.persona.service;
 
 import com.example.volrabbit_be.global.exception.ApiExceptions;
+import com.example.volrabbit_be.global.s3.S3Service;
 import com.example.volrabbit_be.persona.domain.Persona;
 import com.example.volrabbit_be.persona.dto.PersonaDto;
 import com.example.volrabbit_be.persona.repository.PersonaRepository;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import tools.jackson.databind.DatabindException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Service
@@ -26,14 +27,15 @@ public class PersonaService {
 
     private final PersonaRepository personaRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final S3Service s3Service;
 
     // 페르소나 분석 파일(JSON)이 저장되어 있는 S3 경로 (우선 사용)
     @Value("${volrabbit.persona.analysis.s3path:#null}")
-    private Resource personaAnalysisJsonS3Path;
+    private String personaAnalysisJsonS3Path;
 
     // 페르소나 분석 파일(JSON)이 저장되어 있는 로컬 경로 (로컬 테스트, S3 오류 대비)
-    @Value("${volrabbit.persona.analysis.localpath:classpath:persona/analyses/}")
-    private Resource personaAnalysisJsonLocalPath;
+    @Value("${volrabbit.persona.analysis.localpath:src/main/resources/persona/analyses}")
+    private String personaAnalysisJsonLocalPath;
 
     /**
      * 모든 페르소나를 가져옴
@@ -74,11 +76,9 @@ public class PersonaService {
                     objectMapper.readValue(is, PersonaDto.PersonaAnalysisResponse.class);
 
             return analysisResponse;
-        } catch (NoSuchKeyException e) {
-            // localFallback을 false로 호출했을 때를 대비
-            throw new ApiExceptions.NotFound("해당 ID의 페르소나 분석 파일을 찾지 못했습니다. (S3)");
-        } catch (FileNotFoundException e) {
-            throw new ApiExceptions.NotFound("해당 ID의 페르소나 분석 파일을 찾지 못했습니다. (로컬)");
+        } catch (NullPointerException | NoSuchElementException | FileNotFoundException e) {
+            // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
+            throw new ApiExceptions.NotFound("해당 ID의 페르소나 분석 파일을 찾지 못했습니다.");
         } catch (DatabindException e) {
             // localFallback을 false로 호출했을 땐 S3 객체, true로 호출했을 땐 로컬 파일
             throw new RuntimeException("해당 ID의 페르소나 분석 파일이 잘못되었습니다.");
@@ -90,17 +90,13 @@ public class PersonaService {
 
     private InputStream getPersonaAnalysisInputStreamFromPersonaId(long personaId, boolean localFallback) throws IOException {
         try {
-            return getPersonaAnalysisInputStreamFromResource(personaId, personaAnalysisJsonS3Path);
+            return s3Service.getInputStreamFromS3ObjectUri(personaAnalysisJsonS3Path + "/" + personaId + ".json");
         } catch (Exception e) {
             if (!localFallback) {
                 throw e;
             }
 
-            return getPersonaAnalysisInputStreamFromResource(personaId, personaAnalysisJsonLocalPath);
+            return new FileInputStream(personaAnalysisJsonLocalPath + "/" + personaId + ".json");
         }
-    }
-
-    private InputStream getPersonaAnalysisInputStreamFromResource(long personaId, Resource resource) throws IOException {
-        return resource.createRelative(personaId + ".json").getInputStream();
     }
 }
