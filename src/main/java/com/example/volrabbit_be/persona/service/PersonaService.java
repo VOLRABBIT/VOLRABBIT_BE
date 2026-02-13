@@ -26,7 +26,7 @@ import java.util.Optional;
 public class PersonaService {
 
     private final PersonaRepository personaRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     private final S3Service s3Service;
 
     // 페르소나 분석 파일(JSON)이 저장되어 있는 S3 경로 (우선 사용)
