@@ -8,15 +8,18 @@ import software.amazon.awssdk.services.s3.S3Uri;
 import software.amazon.awssdk.services.s3.S3Utilities;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @Component
 @RequiredArgsConstructor
@@ -31,12 +34,20 @@ public class S3Service {
      * @param key 객체 키
      * @return InputStream
      */
-    public InputStream getInputStreamFromS3Object(String bucketName, String key) {
-        ResponseInputStream<GetObjectResponse> response = s3Client.getObject(
-                request -> request.bucket(bucketName).key(key)
-        );
+    public InputStream getInputStreamFromS3Object(String bucketName, String key) throws IOException {
+        if (bucketName == null || key == null) {
+            throw new NullPointerException("버킷 이름과 객체 키 모두 null이 아니어야 합니다.");
+        }
 
-        return response;
+        try {
+            ResponseInputStream<GetObjectResponse> response = s3Client.getObject(
+                    request -> request.bucket(bucketName).key(key)
+            );
+
+            return response;
+        } catch (NoSuchKeyException e) {
+            throw new NoSuchElementException("해당하는 객체를 찾지 못했습니다.");
+        }
     }
 
     /**
@@ -44,7 +55,7 @@ public class S3Service {
      * @param s3ObjectUri 객체 URI
      * @return InputStream
      */
-    public InputStream getInputStreamFromS3ObjectUri(String s3ObjectUri) {
+    public InputStream getInputStreamFromS3ObjectUri(String s3ObjectUri) throws IOException {
         Map<String, String> map = parseS3ObjectUri(s3ObjectUri);
 
         return getInputStreamFromS3Object(map.get("bucketName"), map.get("key"));
@@ -83,6 +94,10 @@ public class S3Service {
     }
 
     private Map<String, String> parseS3ObjectUri(String s3ObjectUri) {
+        if (s3ObjectUri == null) {
+            throw new NullPointerException("객체 URI는 null일 수 없습니다.");
+        }
+
         Map<String, String> result = new HashMap<>();
 
         S3Utilities s3Utilities = s3Client.utilities();
