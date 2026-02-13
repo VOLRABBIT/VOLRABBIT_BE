@@ -36,6 +36,11 @@ public class PersonaDto {
         private String hashtag;
         private List<StatAnalysis> statAnalyses;
         private Recommendation recommendation;
+
+        // 사전 서명된 URL로 대체
+        public void replaceIconUrl(String iconUrl) {
+            this.iconUrl = iconUrl;
+        }
     }
 
     @Getter
