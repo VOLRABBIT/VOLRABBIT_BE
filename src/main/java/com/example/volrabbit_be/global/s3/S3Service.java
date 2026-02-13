@@ -61,6 +61,17 @@ public class S3Service {
         }
     }
 
+    /**
+     * S3 객체 URI로부터 해당 객체에 대한 사전 서명된 URL을 얻음
+     * @param s3ObjectUri 객체 URI
+     * @return 사전 서명된 URL 문자열
+     */
+    public String getPresignedUrlFromS3ObjectUri(String s3ObjectUri) {
+        Map<String, String> map = parseS3ObjectUri(s3ObjectUri);
+
+        return getPresignedUrlForS3Object(map.get("bucket"), map.get("key"));
+    }
+
     private Map<String, String> parseS3ObjectUri(String s3ObjectUri) {
         Map<String, String> result = new HashMap<>();
 
