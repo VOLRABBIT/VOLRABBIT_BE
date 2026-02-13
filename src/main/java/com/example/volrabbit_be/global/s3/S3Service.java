@@ -90,7 +90,7 @@ public class S3Service {
     public String getPresignedUrlFromS3ObjectUri(String s3ObjectUri) {
         Map<String, String> map = parseS3ObjectUri(s3ObjectUri);
 
-        return getPresignedUrlForS3Object(map.get("bucket"), map.get("key"));
+        return getPresignedUrlForS3Object(map.get("bucketName"), map.get("key"));
     }
 
     private Map<String, String> parseS3ObjectUri(String s3ObjectUri) {
