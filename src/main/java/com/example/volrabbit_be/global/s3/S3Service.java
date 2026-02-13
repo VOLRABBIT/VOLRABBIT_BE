@@ -40,6 +40,17 @@ public class S3Service {
     }
 
     /**
+     * S3 객체 URI로부터 해당 객체에 대한 InputStream을 얻어 반환함
+     * @param s3ObjectUri 객체 URI
+     * @return InputStream
+     */
+    public InputStream getInputStreamFromS3ObjectUri(String s3ObjectUri) {
+        Map<String, String> map = parseS3ObjectUri(s3ObjectUri);
+
+        return getInputStreamFromS3Object(map.get("bucketName"), map.get("key"));
+    }
+
+    /**
      * S3 객체에 대해 사전 서명된 URL을 얻음
      * @param bucketName 버킷 이름
      * @param key 객체 키
