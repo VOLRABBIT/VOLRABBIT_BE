@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Uri;
+import software.amazon.awssdk.services.s3.S3Utilities;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -11,7 +13,10 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.InputStream;
+import java.net.URI;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -54,5 +59,22 @@ public class S3Service {
             PresignedGetObjectRequest presignedRequest = presigner.presignGetObject(presignRequest);
             return presignedRequest.url().toString();
         }
+    }
+
+    private Map<String, String> parseS3ObjectUri(String s3ObjectUri) {
+        Map<String, String> result = new HashMap<>();
+
+        S3Utilities s3Utilities = s3Client.utilities();
+
+        URI uri = URI.create(s3ObjectUri);
+        S3Uri s3Uri = s3Utilities.parseUri(uri);
+
+        String bucketName = s3Uri.bucket().orElseThrow(IllegalArgumentException::new);
+        String key = s3Uri.key().orElseThrow(IllegalArgumentException::new);
+
+        result.put("bucketName", bucketName);
+        result.put("key", key);
+
+        return result;
     }
 }
