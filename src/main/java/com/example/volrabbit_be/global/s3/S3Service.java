@@ -23,6 +23,7 @@ import java.util.Map;
 public class S3Service {
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
 
     /**
      * S3 객체로부터 InputStream을 얻어 반환함
@@ -44,21 +45,19 @@ public class S3Service {
      * @param key 객체 키
      * @return 사전 서명된 URL 문자열
      */
-    public static String getPresignedUrlForS3Object(String bucketName, String key) {
-        try (S3Presigner presigner = S3Presigner.create()) {
-            GetObjectRequest objectRequest = GetObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(key)
-                    .build();
+    public String getPresignedUrlForS3Object(String bucketName, String key) {
+        GetObjectRequest objectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
 
-            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                    .signatureDuration(Duration.ofMinutes(10))
-                    .getObjectRequest(objectRequest)
-                    .build();
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(10))
+                .getObjectRequest(objectRequest)
+                .build();
 
-            PresignedGetObjectRequest presignedRequest = presigner.presignGetObject(presignRequest);
-            return presignedRequest.url().toString();
-        }
+        PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
+        return presignedRequest.url().toString();
     }
 
     /**
