@@ -1,6 +1,7 @@
 package com.example.volrabbit_be.global.exception;
 
 import com.example.volrabbit_be.global.common.ApiResponse;
+import lombok.extern.slf4j.Slf4j; // 👈 [필수] 로그 라이브러리 추가
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -9,12 +10,14 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
+@Slf4j // 👈 [필수] 롬복 로그 기능 활성화
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleException(IllegalArgumentException e) {
+        log.warn("IllegalArgumentException: {}", e.getMessage());
         return ApiResponse.error(e.getMessage());
     }
 
@@ -50,6 +53,7 @@ public class GlobalExceptionHandler {
                 .map(fe -> fe.getDefaultMessage())
                 .orElse("요청 값이 올바르지 않습니다.");
 
+        log.warn("Validation Error: {}", message);
         return ApiResponse.error(message);
     }
 
@@ -72,6 +76,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleAll(Exception e) {
+        log.error("🚨 [긴급] 알 수 없는 서버 에러 발생: ", e);
+
         return ApiResponse.error("서버 오류가 발생했습니다.");
     }
 }
