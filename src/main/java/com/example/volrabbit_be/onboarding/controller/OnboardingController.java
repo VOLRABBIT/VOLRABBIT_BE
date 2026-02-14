@@ -6,6 +6,7 @@ import com.example.volrabbit_be.onboarding.dto.OnboardingDto;
 import com.example.volrabbit_be.onboarding.service.OnboardingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,7 +31,7 @@ public class OnboardingController {
     @PostMapping("/submit")
     @Operation(summary = "온보딩 진단 제출 및 페르소나 지정", description = "온보딩 진단 제출 검사를 분석하여 페르소나 지정 및 해당 페르소나 id 반환")
     public ApiResponse<OnboardingDto.OnboardingResultResponse> submitResponses(
-            @RequestBody(required = false) List<OnboardingDto.OnboardingSubmitRequest> request) {
+            @RequestBody(required = false) List<OnboardingDto.@Valid OnboardingSubmitRequest> request) {
 
         long userId = SecurityUtil.getCurrentUserId();
         OnboardingDto.OnboardingResultResponse data = onboardingService.submitResponses(userId, request);
