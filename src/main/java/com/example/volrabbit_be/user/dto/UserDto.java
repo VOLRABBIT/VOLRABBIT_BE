@@ -3,6 +3,7 @@ package com.example.volrabbit_be.user.dto;
 import com.example.volrabbit_be.user.domain.SocialType;
 import com.example.volrabbit_be.user.domain.User;
 import com.example.volrabbit_be.user.domain.UserType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
@@ -20,24 +21,19 @@ public class UserDto {
     public static class TokenResponse {
         private Long userId;
         private String nickname;
+        private String email;
         private String accessToken;
+
+        @JsonIgnore
         private String refreshToken;
 
         public static TokenResponse of(String accessToken, String refreshToken, User user) {
             return TokenResponse.builder()
                     .userId(user.getId())
                     .nickname(user.getNickname())
+                    .email(user.getEmail())
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
-                    .build();
-        }
-        // Refresh Token을 지운 복사본 생성
-        public TokenResponse clearRefreshToken() {
-            return TokenResponse.builder()
-                    .userId(this.userId)
-                    .nickname(this.nickname)
-                    .accessToken(this.accessToken)
-                    .refreshToken(null) // null로 설정
                     .build();
         }
     }

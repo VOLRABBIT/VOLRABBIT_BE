@@ -39,7 +39,7 @@ public class UserController {
         UserDto.TokenResponse tokenResponse = userService.loginGeneral(request);
         CookieUtil.addCookie(response, "refresh_token", tokenResponse.getRefreshToken(), REFRESH_TOKEN_MAX_AGE);
 
-        return ApiResponse.success(tokenResponse.clearRefreshToken());
+        return ApiResponse.success(tokenResponse);
     }
 
     @PostMapping("/reissue")
@@ -56,7 +56,7 @@ public class UserController {
 
         CookieUtil.addCookie(response, "refresh_token", tokenResponse.getRefreshToken(), REFRESH_TOKEN_MAX_AGE);
 
-        return ApiResponse.success(tokenResponse.clearRefreshToken());
+        return ApiResponse.success(tokenResponse);
     }
 
     @PostMapping("/logout")
@@ -96,7 +96,7 @@ public class UserController {
         return ApiResponse.success(userService.updatePersona(currentUserId, request.getPersonaId()));
     }
 
-    @DeleteMapping("/me")
+    @DeleteMapping("/me／delete")
     @Operation(summary = "회원 탈퇴", description = "현재 로그인된 유저의 계정과 토큰 정보를 영구 삭제")
     public ApiResponse<UserDto.DeleteUserResponse> deleteUser(HttpServletResponse response) {
         UserDto.DeleteUserResponse deleteResponse = userService.deleteUser();
