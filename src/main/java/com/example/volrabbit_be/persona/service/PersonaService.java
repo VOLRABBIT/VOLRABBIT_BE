@@ -76,6 +76,7 @@ public class PersonaService {
                     objectMapper.readValue(is, PersonaDto.PersonaAnalysisResponse.class);
 
             analysisResponse.replaceIconUrl(s3Service.getPresignedUrlFromS3ObjectUri(analysisResponse.getIconUrl()));
+            analysisResponse.replaceGraphUrl(s3Service.getPresignedUrlFromS3ObjectUri(analysisResponse.getGraphUrl()));
 
             return analysisResponse;
         } catch (NullPointerException | NoSuchElementException | FileNotFoundException e) {
