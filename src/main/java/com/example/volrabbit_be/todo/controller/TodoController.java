@@ -7,8 +7,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -146,14 +148,23 @@ public class TodoController {
     }
 
     // 사진 인증
-    @Operation(summary = "사진 업로드 인증", description = "사진을 업로드해서 해당 투두의 상태를 complete로 변경합니다. (todoId, body에 이미지)")
-    @PostMapping("/{todoId}/photo-proof")
+    @Operation(
+            summary = "사진 업로드 인증",
+            description = "사진 파일을 업로드하여 해당 투두를 complete 상태로 변경합니다. (multipart/form-data, key=photo)"
+    )
+    @PostMapping(
+            value = "/{todoId}/photo-proof",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
     public ResponseEntity<TodoDto.VerificationResponse> verifyPhotoProof(
             @PathVariable Long todoId,
-            @RequestBody TodoDto.PhotoProofRequest request
+            @RequestParam("photo") MultipartFile photo
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
-        return ResponseEntity.ok(todoService.verifyPhotoProof(userId, todoId, request));
+
+        return ResponseEntity.ok(
+                todoService.verifyPhotoProof(userId, todoId, photo)
+        );
     }
 
 }

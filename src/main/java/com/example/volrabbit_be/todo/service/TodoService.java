@@ -1,6 +1,7 @@
 package com.example.volrabbit_be.todo.service;
 
 import com.example.volrabbit_be.global.exception.ApiExceptions;
+import com.example.volrabbit_be.global.s3.S3Service;
 import com.example.volrabbit_be.todo.domain.Category;
 import com.example.volrabbit_be.todo.domain.Todo;
 import com.example.volrabbit_be.todo.domain.TodoOutcome;
@@ -17,6 +18,7 @@ import com.example.volrabbit_be.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -35,6 +37,7 @@ public class TodoService {
     private final TodoOutcomeRepository todoOutcomeRepository;
     private final TodoVerificationRepository todoVerificationRepository;
     private final TodoSegmentationService todoSegmentationService;
+    private final S3Service s3Service;
 
     private static final int DAILY_DAYS_AHEAD = 30;     // 기준일부터 30일치 추가
     private static final int WEEKLY_WEEKS_AHEAD = 12;   // 12주치 추가
@@ -373,25 +376,37 @@ public class TodoService {
     }
 
     @Transactional
-    public TodoDto.VerificationResponse verifyPhotoProof(Long userId, Long todoId, TodoDto.PhotoProofRequest request) {
-        if (request == null || request.getPhotoUrl() == null || request.getPhotoUrl().isBlank()) {
-            throw new ApiExceptions.BadRequest("photoUrl은 필수입니다.");
+    public TodoDto.VerificationResponse verifyPhotoProof(
+            Long userId,
+            Long todoId,
+            MultipartFile photo
+    ) {
+
+        if (photo == null || photo.isEmpty()) {
+            throw new ApiExceptions.BadRequest("사진 파일은 필수입니다.");
+        }
+
+        if (photo.getContentType() == null || !photo.getContentType().startsWith("image/")) {
+            throw new ApiExceptions.BadRequest("이미지 파일만 업로드 가능합니다.");
         }
 
         Todo todo = findTodo(todoId, userId);
         validateVerifiable(todo, VerificationType.PHOTO_PROOF);
 
+        String photoUrl = s3Service.uploadFile(photo);
+
         TodoVerification verification = TodoVerification.builder()
                 .todo(todo)
                 .build();
-        verification.verifyByPhoto(request.getPhotoUrl());
+
+        verification.verifyByPhoto(photoUrl);
 
         TodoVerification saved = todoVerificationRepository.save(verification);
+
         todo.complete();
 
         return toVerificationResponse(todo, saved.getCreatedDate());
     }
-
     // ===== private helpers =====
 
     private void validateCreateOrUpdateRequest(
