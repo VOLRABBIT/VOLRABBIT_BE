@@ -2,10 +2,12 @@ package com.example.volrabbit_be.global.exception;
 
 import com.example.volrabbit_be.global.common.ApiResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -49,6 +51,22 @@ public class GlobalExceptionHandler {
                 .orElse("요청 값이 올바르지 않습니다.");
 
         return ApiResponse.error(message);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidation(HandlerMethodValidationException e) {
+        // 반환값에서 검증 오류가 발생한 경우
+        if (e.isForReturnValue()) {
+            return ResponseEntity.internalServerError().body(handleAll(e));
+        }
+
+        // 요청과 관련한 검증 오류가 발생한 경우
+        String message = e.getAllErrors().stream()
+                .findFirst()
+                .map(fe -> fe.getDefaultMessage())
+                .orElse("요청 값이 올바르지 않습니다.");
+
+        return ResponseEntity.badRequest().body(ApiResponse.error(message));
     }
 
     @ExceptionHandler(Exception.class)
