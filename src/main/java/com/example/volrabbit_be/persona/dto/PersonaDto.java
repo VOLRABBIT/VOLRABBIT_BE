@@ -34,12 +34,17 @@ public class PersonaDto {
         private String name;
         private String iconUrl;
         private String hashtag;
+        private String graphUrl;
         private List<StatAnalysis> statAnalyses;
         private Recommendation recommendation;
 
         // 사전 서명된 URL로 대체
         public void replaceIconUrl(String iconUrl) {
             this.iconUrl = iconUrl;
+        }
+
+        public void replaceGraphUrl(String graphUrl) {
+            this.graphUrl = graphUrl;
         }
     }
 
