@@ -9,6 +9,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -41,9 +43,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 1. 누구나 접근 가능 (회원가입, 재발급, Swagger)
                         .requestMatchers(
-                                "/api/users/guest",
                                 "/api/users/reissue",
                                 "/api/users/nickname/check",
+                                "/api/users/signup",
+                                "/api/users/login",
                                 "/api/auth/**",
 
                                 // Swagger 관련 경로 허용
@@ -84,5 +87,9 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 }

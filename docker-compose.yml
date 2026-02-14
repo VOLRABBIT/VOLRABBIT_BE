@@ -5,15 +5,22 @@ services:
     container_name: volrabbit-backend
     image: volrabbit-backend:latest
     build: .
-
-    # 포트 연결 (외부:내부)
     ports:
       - "8080:8080"
-
-    # 환경 변수 파일 연결
-    # .env 파일에서 DB_HOST, DB_PORT, DB_NAME, DB_USERNAME, DB_PASSWORD 등을 읽음
     env_file:
       - .env
-
-    # 재시작 정책
+    environment:
+      DB_HOST: ${DB_HOST}
+      TZ: Asia/Seoul
     restart: unless-stopped
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
