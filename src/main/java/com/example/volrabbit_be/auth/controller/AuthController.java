@@ -52,6 +52,6 @@ public class AuthController {
 
         CookieUtil.addCookie(response, "refresh_token", tokenResponse.getRefreshToken(), REFRESH_TOKEN_MAX_AGE);
 
-        return ApiResponse.success(tokenResponse.clearRefreshToken());
+        return ApiResponse.success(tokenResponse);
     }
 }
