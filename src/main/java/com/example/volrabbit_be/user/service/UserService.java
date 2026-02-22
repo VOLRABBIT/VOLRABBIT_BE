@@ -42,9 +42,6 @@ public class UserService {
         if (checkNicknameDuplicate(request.getNickname())) {
             throw new IllegalArgumentException("이미 존재하는 닉네임입니다.");
         }
-        if (userRepository.existsByDeviceId(request.getDeviceId())) {
-            throw new IllegalArgumentException("해당 기기에서 이미 가입된 계정이 존재합니다. (1기기 1계정 정책)");
-        }
 
         User user = User.builder()
                 .email(request.getEmail())
@@ -52,7 +49,6 @@ public class UserService {
                 .nickname(request.getNickname())
                 .userType(UserType.GENERAL)
                 .socialType(SocialType.NONE)
-                .deviceId(request.getDeviceId())
                 .build();
 
         User savedUser = userRepository.save(user);
@@ -144,7 +140,6 @@ public class UserService {
         userTokenRepository.delete(userToken);
     }
 
-
     // 토큰 재발급
     @Transactional
     public UserDto.TokenResponse reissueToken(UserDto.ReissueRequest request) {
@@ -177,7 +172,6 @@ public class UserService {
 
         return UserDto.TokenResponse.of(accessToken, refreshToken, user);
     }
-
 
     public boolean checkNicknameDuplicate(String nickname) {
         return userRepository.existsByNickname(nickname);
