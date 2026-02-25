@@ -37,16 +37,13 @@ public class User extends BaseTimeEntity {
 
     private String socialId;
 
-    @Column(unique = true)
-    private String deviceId;
-
     private Long personaId;
 
     private Long currentMapId;
 
     @Builder
     public User(String email, String password, String nickname, UserType userType,
-                SocialType socialType, String socialId, String deviceId,
+                SocialType socialType, String socialId,
                 Long personaId, Long currentMapId) {
         this.email = email;
         this.password = password;
@@ -54,7 +51,6 @@ public class User extends BaseTimeEntity {
         this.userType = userType;
         this.socialType = socialType;
         this.socialId = socialId;
-        this.deviceId = deviceId;
         this.personaId = personaId;
         this.currentMapId = currentMapId;
     }
