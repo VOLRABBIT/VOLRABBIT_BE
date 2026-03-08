@@ -3,6 +3,8 @@ package com.example.volrabbit_be.todo.controller;
 import com.example.volrabbit_be.global.util.SecurityUtil;
 import com.example.volrabbit_be.todo.dto.TodoDto;
 import com.example.volrabbit_be.todo.service.TodoStepService;
+
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -31,5 +33,16 @@ public class TodoStepController {
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
         return ResponseEntity.ok(todoStepService.toggleStep(userId, todoId, stepId));
+    }
+
+    // TODO: [임시] 나중에 AI 전체 연동 완성 시 삭제 예정 -> 프론트 수동 수정 API
+    // todo_step 수동 텍스트 수정
+    @PatchMapping("/{todoId}/steps/{stepId}/content")
+    public ResponseEntity<TodoDto.StepListResponse> updateStepContent(
+            @PathVariable Long todoId,
+            @PathVariable Long stepId,
+            @Valid @RequestBody TodoDto.StepUpdateRequest request) {
+        Long userId = SecurityUtil.getCurrentUserId();
+        return ResponseEntity.ok(todoStepService.updateStep(userId, todoId, stepId, request));
     }
 }
