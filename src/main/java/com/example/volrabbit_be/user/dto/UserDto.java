@@ -48,9 +48,6 @@ public class UserDto {
         private String password;
         @NotBlank
         private String nickname;
-
-        @NotBlank(message = "기기 정보(deviceId)는 필수입니다.")
-        private String deviceId;
     }
 
     // 로그인 요청 (일반 로그인)
@@ -142,6 +139,4 @@ public class UserDto {
                     .build();
         }
     }
-
-
 }

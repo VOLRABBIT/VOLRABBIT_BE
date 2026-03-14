@@ -97,7 +97,7 @@ public class AuthService {
 
     // 소셜 로그인 통합 처리 (핵심 비즈니스 로직)
     @Transactional
-    public UserDto.TokenResponse processSocialLogin(String provider, String code, String deviceId) {
+    public UserDto.TokenResponse processSocialLogin(String provider, String code) { // deviceId 파라미터 삭제
 
         SocialUserInfo userInfo = switch (provider.toUpperCase()) {
             case "KAKAO" -> processKakao(code);
@@ -129,10 +129,6 @@ public class AuthService {
         }
 
         // 신규 유저인 경우 (회원가입 처리)
-        if (userRepository.existsByDeviceId(deviceId)) {
-            throw new IllegalArgumentException("해당 기기에서 이미 가입된 계정이 존재합니다. (1기기 1계정)");
-        }
-
         String finalNickname = (nickname != null && !nickname.isBlank())
                 ? nickname
                 : "User_" + UUID.randomUUID().toString().substring(0, 8);
@@ -148,7 +144,7 @@ public class AuthService {
                 .userType(UserType.SOCIAL)
                 .socialType(socialType)
                 .socialId(socialId)
-                .deviceId(deviceId)
+                // .deviceId(deviceId) <- 삭제됨
                 .build();
 
         userRepository.save(newUser);
