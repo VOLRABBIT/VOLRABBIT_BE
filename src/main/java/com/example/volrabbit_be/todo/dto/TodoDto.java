@@ -221,6 +221,13 @@ public class TodoDto {
         private SegmentationType segmentationType; // TWO/THREE/AUTO
     }
 
+    // TODO: [임시] 나중에 AI 전체 연동 완성 시 삭제 예정 -> 수동 텍스트 수정용 DTO
+    @Getter
+    @NoArgsConstructor
+    public static class StepUpdateRequest {
+        private String content;
+    }
+
     // 세분화 Step 조회 DTO
     @Getter
     @Builder
