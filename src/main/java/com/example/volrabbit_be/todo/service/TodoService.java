@@ -7,12 +7,12 @@ import com.example.volrabbit_be.todo.domain.Todo;
 import com.example.volrabbit_be.todo.domain.TodoOutcome;
 import com.example.volrabbit_be.todo.domain.TodoVerification;
 import com.example.volrabbit_be.todo.domain.enumType.*;
+import com.example.volrabbit_be.todo.domain.enumType.todoStatus;
 import com.example.volrabbit_be.todo.dto.TodoDto;
 import com.example.volrabbit_be.todo.repository.CategoryRepository;
 import com.example.volrabbit_be.todo.repository.TodoOutcomeRepository;
 import com.example.volrabbit_be.todo.repository.TodoRepository;
 import com.example.volrabbit_be.todo.repository.TodoVerificationRepository;
-import com.example.volrabbit_be.todo.domain.enumType.todoStatus;
 import com.example.volrabbit_be.user.domain.User;
 import com.example.volrabbit_be.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +54,8 @@ public class TodoService {
                 request.getVerificationType()
         );
 
+        String normalizedContent = normalizeContent(request.getContent());
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiExceptions.NotFound("사용자가 존재하지 않습니다."));
 
@@ -64,18 +66,18 @@ public class TodoService {
             throw new ApiExceptions.Conflict("비활성화된 카테고리는 선택할 수 없습니다.");
         }
 
+        validateDuplicateOnCreate(userId, category.getId(), normalizedContent);
+
         LocalDate dueDate = resolveDueDate(request.getDueType(), request.getDueDate());
         validateDueDateNotPast(dueDate);
 
-        // 반복이면 여러 개 생성 + repeatGroupId 묶기
         String repeatGroupId = (request.getRepeatType() == RepeatType.NONE)
                 ? null
                 : UUID.randomUUID().toString();
 
-        List<Todo> toSave = buildTodosForRepeat(user, category, request, dueDate, repeatGroupId);
+        List<Todo> toSave = buildTodosForRepeat(user, category, request, normalizedContent, dueDate, repeatGroupId);
         List<Todo> savedList = todoRepository.saveAll(toSave);
 
-        // 가장 빠른 dueDate의 투두 1개를 대표로 응답/AI 호출
         Todo first = savedList.stream()
                 .min((a, b) -> {
                     int c = a.getDueDate().compareTo(b.getDueDate());
@@ -87,7 +89,6 @@ public class TodoService {
                 })
                 .orElseThrow(() -> new ApiExceptions.BadRequest("투두 생성에 실패했습니다."));
 
-        // 세분화 필요 시 호출
         todoSegmentationService.generateStepsIfNeeded(userId, first.getId(), request.getSegmentationType());
 
         return TodoDto.CreateResponse.builder()
@@ -128,14 +129,17 @@ public class TodoService {
 
         Todo todo = findTodo(todoId, userId);
 
-        // 1) content (옵션)
+        String newContent = null;
         if (request.getContent() != null) {
-            String content = request.getContent();
-            if (content.isBlank()) throw new ApiExceptions.BadRequest("content는 비어 있을 수 없습니다.");
-            if (content.length() > 10) throw new ApiExceptions.BadRequest("content는 최대 10자입니다.");
+            newContent = normalizeContent(request.getContent());
+            if (newContent.isBlank()) {
+                throw new ApiExceptions.BadRequest("content는 비어 있을 수 없습니다.");
+            }
+            if (newContent.length() > 10) {
+                throw new ApiExceptions.BadRequest("content는 최대 10자입니다.");
+            }
         }
 
-        // 2) category (옵션)
         Category newCategory = null;
         if (request.getCategoryId() != null) {
             newCategory = categoryRepository.findByIdAndUserId(request.getCategoryId(), userId)
@@ -146,7 +150,6 @@ public class TodoService {
             }
         }
 
-        // 3) dueType / dueDate 규칙
         DueType newDueType = null;
         LocalDate newDueDate = null;
 
@@ -169,13 +172,16 @@ public class TodoService {
             validateDueDateNotPast(newDueDate);
         }
 
-        // 4) repeatType 변경 시 repeatGroupId 처리
+        Long targetCategoryId = (newCategory != null) ? newCategory.getId() : todo.getCategory().getId();
+        String targetContent = (newContent != null) ? newContent : todo.getContent();
+
+        validateDuplicateOnUpdate(userId, todo.getId(), targetCategoryId, targetContent);
+
         String newRepeatGroupId = resolveRepeatGroupIdForUpdate(todo, request.getRepeatType());
 
-        // 5) patch 적용
         todo.patchUpdate(
                 newCategory,
-                request.getContent(),
+                newContent,
                 newDueDate,
                 newDueType,
                 request.getRepeatType(),
@@ -407,6 +413,7 @@ public class TodoService {
 
         return toVerificationResponse(todo, saved.getCreatedDate());
     }
+
     // ===== private helpers =====
 
     private void validateCreateOrUpdateRequest(
@@ -419,7 +426,7 @@ public class TodoService {
     ) {
         if (categoryId == null) throw new ApiExceptions.BadRequest("categoryId는 필수입니다.");
         if (content == null || content.isBlank()) throw new ApiExceptions.BadRequest("content는 필수입니다.");
-        if (content.length() > 10) throw new ApiExceptions.BadRequest("content는 최대 10자입니다.");
+        if (content.trim().length() > 10) throw new ApiExceptions.BadRequest("content는 최대 10자입니다.");
         if (dueType == null) throw new ApiExceptions.BadRequest("dueType은 필수입니다.");
         if (repeatType == null) throw new ApiExceptions.BadRequest("repeatType은 필수입니다.");
         if (segmentationType == null) throw new ApiExceptions.BadRequest("segmentationType은 필수입니다.");
@@ -445,6 +452,26 @@ public class TodoService {
             if (request.getCustomText() == null || request.getCustomText().isBlank()) {
                 throw new ApiExceptions.BadRequest("reasonCode가 ETC이면 customText는 필수입니다.");
             }
+        }
+    }
+
+    private String normalizeContent(String content) {
+        return content == null ? null : content.trim();
+    }
+
+    private void validateDuplicateOnCreate(Long userId, Long categoryId, String content) {
+        boolean exists = todoRepository.existsByUserIdAndCategoryIdAndContent(userId, categoryId, content);
+        if (exists) {
+            throw new ApiExceptions.Conflict("같은 카테고리에 동일한 내용의 투두가 이미 존재합니다.");
+        }
+    }
+
+    private void validateDuplicateOnUpdate(Long userId, Long todoId, Long categoryId, String content) {
+        boolean exists = todoRepository.existsByUserIdAndCategoryIdAndContentAndIdNot(
+                userId, categoryId, content, todoId
+        );
+        if (exists) {
+            throw new ApiExceptions.Conflict("같은 카테고리에 동일한 내용의 투두가 이미 존재합니다.");
         }
     }
 
@@ -491,6 +518,7 @@ public class TodoService {
             User user,
             Category category,
             TodoDto.CreateRequest request,
+            String normalizedContent,
             LocalDate baseDueDate,
             String repeatGroupId
     ) {
@@ -501,7 +529,7 @@ public class TodoService {
             Todo todo = Todo.builder()
                     .user(user)
                     .category(category)
-                    .content(request.getContent())
+                    .content(normalizedContent)
                     .dueType(request.getDueType())
                     .dueDate(date)
                     .repeatType(request.getRepeatType())

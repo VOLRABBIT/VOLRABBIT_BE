@@ -22,4 +22,9 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
 
     // 자정 자동 실패 대상: dueDate < today && status == IN_PROGRESS
     List<Todo> findAllByDueDateBeforeAndTodoStatus(LocalDate date, todoStatus status);
+
+    boolean existsByUserIdAndCategoryIdAndContent(Long userId, Long categoryId, String content);
+
+    boolean existsByUserIdAndCategoryIdAndContentAndIdNot(Long userId, Long categoryId, String content, Long id);
+
 }
