@@ -5,6 +5,7 @@ import com.example.volrabbit_be.global.jwt.TokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -42,6 +43,7 @@ public class SecurityConfig {
                 // 요청 URL별 권한 설정
                 .authorizeHttpRequests(auth -> auth
                         // 1. 누구나 접근 가능 (회원가입, 재발급, Swagger)
+                        .requestMatchers(HttpMethod.HEAD, "/**").permitAll()
                         .requestMatchers(
                                 "/api/users/reissue",
                                 "/api/users/nickname/check",
@@ -73,7 +75,7 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(List.of("*"));
 
         // 2. 허용할 HTTP 메서드 (GET, POST, PUT, DELETE 등)
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
 
         // 3. 허용할 헤더 (Authorization, Content-Type 등)
         configuration.setAllowedHeaders(List.of("*"));
